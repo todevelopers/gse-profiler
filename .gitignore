@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+.venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# GJS / Node tooling (eslint, etc.)
+node_modules/
+package-lock.json
+
+# Compiled GSettings schemas
+schemas/gschemas.compiled
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.orig
+.DS_Store
+
+# Distribution artifacts
+*.tar.gz
+*.tar.xz
+*.zip
+*.flatpak
+*.rpm
+*.deb
+
+# Logs
+*.log
+
+# Local config overrides
+.env.local
+config.local.*
+
+# Temporary files
+*.tmp
+*.bak

@@ -1,0 +1,172 @@
+# gse-profiler
+
+**GTK4 desktop application for managing, debugging, and profiling GNOME Shell extensions.**
+
+Designed for extension developers who need deep runtime insight — live function timing,
+log filtering, object inspection — without leaving the desktop.
+
+---
+
+## Features (V1)
+
+| Feature               | Description                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| **Extension Manager** | List all installed extensions, enable/disable, clone from GitHub, open source folder       |
+| **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search        |
+| **Profiler**          | Live function timing via monkey-patching; load and visualize saved profile files           |
+| **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object |
+
+---
+
+## Architecture
+
+```
+GTK4 App (Python/PyGObject)
+         │
+         ├─ D-Bus ──────────────► org.gnome.Shell.Extensions
+         │                        (list / enable / disable)
+         │
+         └─ Unix Socket (JSON) ──► Companion Extension (GJS)
+                                         │
+                                         ├── Target extension   (monkey-patch, inspect)
+                                         ├── Core gnome-shell   (optional)
+                                         └── opt-in API bridge
+```
+
+The app auto-installs a **companion GJS extension** (`gse-profiler-bridge`) into
+`~/.local/share/gnome-shell/extensions/`. The companion runs inside the `gnome-shell` process
+and is responsible for monkey-patching, log interception, object inspection, and the developer
+API bridge. It communicates back to the app over a Unix socket using newline-delimited JSON.
+
+Standard GNOME Shell APIs (extension list, enable/disable) are accessed directly via D-Bus.
+
+---
+
+## Requirements
+
+- GNOME 48+
+- Python 3.11+
+- PyGObject (GTK4 bindings)
+- `git` — for cloning extensions
+- `journalctl` — for the log viewer (part of `systemd`)
+
+---
+
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/gazovic/gse-profiler.git
+cd gse-profiler
+```
+
+### 2. Install Python dependencies
+
+Via your distro package manager (recommended — avoids GTK4 binding issues with pip):
+
+```bash
+# Fedora / RHEL
+sudo dnf install python3-gobject gtk4 libadwaita
+
+# Ubuntu / Debian (24.04+)
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+```
+
+Or with pip (requires system GTK4 libraries already installed):
+
+```bash
+pip install --user PyGObject
+```
+
+### 3. Run
+
+```bash
+python3 app/main.py
+```
+
+On first launch the app will offer to install the companion extension and restart GNOME Shell.
+
+---
+
+## Companion Extension
+
+The companion extension is bundled in `companion-extension/` and **auto-installed** by the
+application — no manual steps needed. After installation, GNOME Shell must be restarted:
+
+- **Wayland** — the app will prompt you to log out and log back in
+- **X11** — automatic restart via `Meta.restart()` over D-Bus
+
+The companion shows a small status indicator in the GNOME panel to confirm it is active.
+The main app window also shows a connection indicator (connected / disconnected).
+
+---
+
+## opt-in Developer API
+
+Extension developers can optionally import `api/devtools-api.js` for deeper profiling integration.
+If gse-profiler is not running, all API calls silently **no-op** — your extension works normally
+with zero overhead.
+
+```javascript
+import { DevToolsClient } from '/path/to/api/devtools-api.js';
+
+const devtools = new DevToolsClient();
+devtools.connect('my-extension@example.com');
+
+devtools.mark('init-start');
+// ... your initialization code ...
+devtools.mark('init-end');
+devtools.measure('init', 'init-start', 'init-end');
+
+devtools.counter('network-requests', 1);
+devtools.watch(myObject, ['property1', 'property2']);
+```
+
+---
+
+## Project Structure
+
+```
+gse-profiler/
+├── app/                        # GTK4 Python application
+│   ├── main.py
+│   ├── ui/
+│   │   ├── extension_manager.py
+│   │   ├── log_viewer.py
+│   │   ├── profiler_view.py
+│   │   └── inspector_view.py
+│   ├── core/
+│   │   ├── dbus_client.py      # D-Bus proxy for gnome-shell APIs
+│   │   ├── socket_server.py    # Unix socket server (async)
+│   │   ├── git_manager.py      # git clone / pull subprocess wrapper
+│   │   └── journal_reader.py   # journalctl --follow subprocess
+│   └── data/ui/                # Glade .ui files (optional)
+├── companion-extension/        # GJS GNOME Shell extension (bridge)
+│   ├── extension.js
+│   ├── profiler.js
+│   ├── inspector.js
+│   ├── socket_client.js
+│   └── metadata.json
+├── api/
+│   └── devtools-api.js         # opt-in developer API
+├── scripts/
+│   └── restart-shell.sh        # handles Wayland (logout) and X11 (restart)
+└── tests/                      # pytest unit tests
+```
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Run linters before committing: `ruff check app/` and `eslint companion-extension/ api/`
+4. Run tests: `pytest tests/`
+5. Open a pull request
+
+---
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).
