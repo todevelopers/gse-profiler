@@ -31,6 +31,7 @@ schemas/gschemas.compiled
 *.swo
 *.orig
 .DS_Store
+.claude/
 
 # Distribution artifacts
 *.tar.gz
