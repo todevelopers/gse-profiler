@@ -4,8 +4,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-# E501 (line too long) — long description strings in placeholder views are acceptable
-ignore = ["E501"]
+# E501 — long description strings in placeholder views are acceptable
+# E402 — gi.require_version() must precede gi.repository imports (PyGObject requirement)
+ignore = ["E501", "E402"]
 
 [tool.mypy]
 python_version = "3.11"

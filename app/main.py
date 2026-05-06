@@ -7,12 +7,12 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk
 
-from app.ui.extension_manager import ExtensionManagerView  # noqa: E402
-from app.ui.inspector_view import InspectorView  # noqa: E402
-from app.ui.log_viewer import LogViewerView  # noqa: E402
-from app.ui.profiler_view import ProfilerView  # noqa: E402
+from app.ui.extension_manager import ExtensionManagerView
+from app.ui.inspector_view import InspectorView
+from app.ui.log_viewer import LogViewerView
+from app.ui.profiler_view import ProfilerView
 
 APP_ID = "org.gnome.GSEProfiler"
 
