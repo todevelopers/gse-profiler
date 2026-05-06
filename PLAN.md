@@ -5,50 +5,27 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 0: Project Setup & CI
+## Phase 0: Project Setup & CI ✅
 
 **Goal:** Skeleton that launches, CI green from day one.
 
 ### App skeleton
 
-- [ ] Directory structure per README
-- [ ] `app/main.py` — `Adw.Application` + empty `Adw.ApplicationWindow`
-- [ ] Sidebar navigation (`AdwNavigationSplitView` or `AdwViewStack`)
-- [ ] Placeholder views for each section (stub `Gtk.Label`)
-- [ ] `companion-extension/metadata.json` — companion extension scaffold
+- [x] Directory structure per README
+- [x] `app/main.py` — `Adw.Application` + `Adw.ApplicationWindow` with `Adw.OverlaySplitView`
+- [x] Sidebar navigation (`Adw.OverlaySplitView` + `GtkListBox` with `navigation-sidebar` class)
+- [x] Placeholder views for each section (`Adw.StatusPage` per view)
+- [x] `companion-extension/metadata.json` — companion extension scaffold
+- [x] `app/core/` stubs — `DBusClient`, `SocketServer`, `GitManager`, `JournalReader`
+- [x] `api/devtools-api.js` — `DevToolsClient` skeleton with JSDoc
+- [x] `scripts/restart-shell.sh` — X11/Wayland aware shell restart
+- [x] `scripts/setup-and-run.sh` — Fedora quick-start (no sudo, no prompts)
 
 ### GitHub Actions
 
-**`ci.yml`** — triggers on push to any branch and PRs to `main`
-
-```
-1. Checkout
-2. Python 3.11 setup
-3. Install deps (PyGObject stub / mock for headless CI)
-4. ruff check app/
-5. mypy app/
-6. pytest tests/ -v --tb=short
-7. Node.js 20 setup
-8. npm ci  (eslint + gnome-shell preset)
-9. eslint companion-extension/ api/
-```
-
-**`release.yml`** — triggers on tag push `v*`
-
-```
-1. Checkout
-2. Build source tarball (git archive)
-3. Generate changelog from git log --oneline since last tag
-4. Create GitHub Release with tarball attached
-```
-
-**`companion-test.yml`** — triggers on changes to `companion-extension/` or `api/`
-
-```
-1. Checkout
-2. Node.js 20 setup
-3. Run GJS unit tests (jasmine-gjs or custom runner)
-```
+- [x] **`ci.yml`** — ruff · mypy · pytest · eslint on every push and PR to `main`
+- [x] **`release.yml`** — tarball + changelog on `v*` tag push
+- [x] **`companion-test.yml`** — ESLint on changes to `companion-extension/` or `api/`
 
 ---
 
