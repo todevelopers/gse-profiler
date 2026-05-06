@@ -2,16 +2,16 @@
 # GSE Profiler — quick-start script for Fedora (including Hyper-V VMs).
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/gazovic/gse-profiler/main/scripts/setup-and-run.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scripts/setup-and-run.sh | bash
 #   — or —
-#   git clone https://github.com/gazovic/gse-profiler.git && bash gse-profiler/scripts/setup-and-run.sh
+#   git clone https://github.com/todevelopers/gse-profiler.git && bash gse-profiler/scripts/setup-and-run.sh
 #
 # The script clones (or updates) the repository, installs dependencies, and
 # starts the GTK4 application.  Run it from inside an active GNOME session —
 # not from SSH without a display.
 set -euo pipefail
 
-REPO_URL="https://github.com/gazovic/gse-profiler.git"
+REPO_URL="https://github.com/todevelopers/gse-profiler.git"
 INSTALL_DIR="${GSE_PROFILER_DIR:-$HOME/gse-profiler}"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
