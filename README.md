@@ -18,6 +18,21 @@ log filtering, object inspection — without leaving the desktop.
 
 ---
 
+## Quick Start
+
+> Requires Fedora (or any GNOME 48+ distro) running inside an active GNOME session.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scripts/setup-and-run.sh | bash
+```
+
+The script checks for GTK4/libadwaita (pre-installed on any Fedora GNOME system),
+clones the repository to `~/gse-profiler`, and launches the app — no `sudo`, no prompts.
+
+On subsequent runs the same command pulls the latest changes and restarts the app.
+
+---
+
 ## Architecture
 
 ```
