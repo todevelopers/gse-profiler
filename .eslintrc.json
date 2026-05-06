@@ -1,0 +1,22 @@
+{
+  "env": {
+    "es2022": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "rules": {
+    "prefer-const": "error",
+    "no-var": "error",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "eqeqeq": "error",
+    "curly": "error"
+  },
+  "globals": {
+    "log": "readonly",
+    "logError": "readonly",
+    "print": "readonly",
+    "printerr": "readonly"
+  }
+}

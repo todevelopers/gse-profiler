@@ -1,0 +1,13 @@
+{
+  "name": "gse-profiler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Companion extension and developer API linting config for GSE Profiler",
+  "scripts": {
+    "lint": "eslint companion-extension/ api/",
+    "lint:fix": "eslint --fix companion-extension/ api/"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  }
+}

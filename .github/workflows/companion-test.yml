@@ -1,0 +1,32 @@
+name: Companion Tests
+
+on:
+  push:
+    paths:
+      - "companion-extension/**"
+      - "api/**"
+      - ".eslintrc.json"
+      - "package.json"
+  pull_request:
+    paths:
+      - "companion-extension/**"
+      - "api/**"
+
+jobs:
+  lint:
+    name: ESLint (companion + api)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: ESLint
+        run: npm run lint

@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build source tarball
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz \
+            --prefix="gse-profiler-${VERSION}/" \
+            -o "gse-profiler-${VERSION}.tar.gz" \
+            HEAD
+          echo "TARBALL=gse-profiler-${VERSION}.tar.gz" >> "$GITHUB_ENV"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Generate changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [[ -n "$PREV_TAG" ]]; then
+            git log --oneline "${PREV_TAG}..HEAD" > CHANGELOG.txt
+          else
+            git log --oneline HEAD > CHANGELOG.txt
+          fi
+          cat CHANGELOG.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "GSE Profiler ${{ env.VERSION }}"
+          body_path: CHANGELOG.txt
+          files: ${{ env.TARBALL }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
