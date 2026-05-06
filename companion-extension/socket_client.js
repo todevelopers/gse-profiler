@@ -19,7 +19,7 @@ export class SocketClient {
     }
 
     send(_message) {
-        if (!this.#connected) return;
+        if (!this.#connected) { return; }
         // Phase 2: serialize to JSON and write to socket
     }
 }

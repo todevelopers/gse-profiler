@@ -46,8 +46,8 @@ export class DevToolsClient {
      * Record a named timestamp marker.
      * @param {string} name
      */
-    mark(name) {
-        if (!this.#connected) return;
+    mark(_name) {
+        if (!this.#connected) { return; }
         // Phase 7: send { type: 'devtools_mark', name, ts: Date.now() }
     }
 
@@ -57,8 +57,8 @@ export class DevToolsClient {
      * @param {string} startMark
      * @param {string} endMark
      */
-    measure(name, startMark, endMark) {
-        if (!this.#connected) return;
+    measure(_name, _startMark, _endMark) {
+        if (!this.#connected) { return; }
         // Phase 7: send { type: 'devtools_measure', name, startMark, endMark }
     }
 
@@ -67,8 +67,8 @@ export class DevToolsClient {
      * @param {string} name
      * @param {number} value
      */
-    counter(name, value) {
-        if (!this.#connected) return;
+    counter(_name, _value) {
+        if (!this.#connected) { return; }
         // Phase 7: send { type: 'devtools_counter', name, value }
     }
 
@@ -77,8 +77,8 @@ export class DevToolsClient {
      * @param {object} object
      * @param {string[]} properties
      */
-    watch(object, properties) {
-        if (!this.#connected) return;
+    watch(_object, _properties) {
+        if (!this.#connected) { return; }
         // Phase 7: install property change listeners via Object.defineProperty
     }
 }
