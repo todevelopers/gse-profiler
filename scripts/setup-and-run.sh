@@ -38,12 +38,16 @@ fi
 success "Dependencies OK."
 
 # ── Clone or update ────────────────────────────────────────────────────────────
+# GIT_TERMINAL_PROMPT=0 prevents git from opening /dev/tty to ask for credentials.
+# The repo is public so no credentials are needed; this suppresses any keyring prompt.
+export GIT_TERMINAL_PROMPT=0
+
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     info "Updating existing installation at $INSTALL_DIR…"
     git -C "$INSTALL_DIR" pull --ff-only
 else
     info "Cloning to $INSTALL_DIR…"
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone -c credential.helper= "$REPO_URL" "$INSTALL_DIR"
 fi
 
 success "Repository is up to date."
