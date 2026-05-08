@@ -1,20 +1,26 @@
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import gi
 
-gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk
+gi.require_version("Gio", "2.0")
+gi.require_version("GLib", "2.0")
+gi.require_version("Gtk", "4.0")
+from gi.repository import Adw, Gio, GLib, Gtk
 
+from app.core.companion_manager import CompanionManager
+from app.core.dbus_client import DBusClient
 from app.ui.extension_manager import ExtensionManagerView
 from app.ui.inspector_view import InspectorView
 from app.ui.log_viewer import LogViewerView
 from app.ui.profiler_view import ProfilerView
 
 APP_ID = "org.gnome.GSEProfiler"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _NAV_ITEMS: list[tuple[str, str, str]] = [
     ("extensions", "Extensions", "application-x-addon-symbolic"),
@@ -24,16 +30,45 @@ _NAV_ITEMS: list[tuple[str, str, str]] = [
 ]
 
 
+class _ConnectionChip(Gtk.Label):
+    """Header bar chip showing live socket connection state."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_connected(False)
+
+    def set_connected(self, connected: bool) -> None:
+        if connected:
+            self.set_text("● Connected")
+            self.remove_css_class("dim-label")
+            self.add_css_class("success")
+        else:
+            self.set_text("● Disconnected")
+            self.remove_css_class("success")
+            self.add_css_class("dim-label")
+
+
 class MainWindow(Adw.ApplicationWindow):
-    def __init__(self, **kwargs: object) -> None:
+    def __init__(self, dbus_client: DBusClient, **kwargs: object) -> None:
         super().__init__(**kwargs)
+        self._dbus = dbus_client
         self.set_title("GSE Profiler")
         self.set_default_size(1100, 720)
+        self._register_actions()
         self._build_ui()
+
+    def _register_actions(self) -> None:
+        install_action = Gio.SimpleAction.new("install-companion", None)
+        install_action.connect("activate", self._on_install_companion)
+        self.add_action(install_action)
+
+        reinstall_action = Gio.SimpleAction.new("reinstall-companion", None)
+        reinstall_action.connect("activate", self._on_reinstall_companion)
+        self.add_action(reinstall_action)
 
     def _build_ui(self) -> None:
         views: dict[str, Gtk.Widget] = {
-            "extensions": ExtensionManagerView(),
+            "extensions": ExtensionManagerView(self._dbus),
             "logs": LogViewerView(),
             "profiler": ProfilerView(),
             "inspector": InspectorView(),
@@ -68,8 +103,25 @@ class MainWindow(Adw.ApplicationWindow):
             row.add_prefix(Gtk.Image.new_from_icon_name(icon))
             nav_list.append(row)
 
+        # App menu
+        menu = Gio.Menu()
+        section = Gio.Menu()
+        section.append("Install Companion", "win.install-companion")
+        section.append("Reinstall Companion", "win.reinstall-companion")
+        menu.append_section("Companion Extension", section)
+
+        menu_btn = Gtk.MenuButton()
+        menu_btn.set_icon_name("open-menu-symbolic")
+        menu_btn.set_tooltip_text("Application menu")
+        menu_btn.set_menu_model(menu)
+
+        # Connection status chip
+        self._conn_chip = _ConnectionChip()
+
         sidebar_header = Adw.HeaderBar()
         sidebar_header.set_title_widget(Gtk.Label(label="GSE Profiler"))
+        sidebar_header.pack_end(menu_btn)
+        sidebar_header.pack_end(self._conn_chip)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
@@ -100,15 +152,30 @@ class MainWindow(Adw.ApplicationWindow):
         self._stack.set_visible_child_name(key)
         self._page_title.set_label(title)
 
+    def _on_install_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
+        mgr = CompanionManager(_PROJECT_ROOT, self._dbus)
+        mgr.ensure_installed(parent_window=self)
+
+    def _on_reinstall_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
+        mgr = CompanionManager(_PROJECT_ROOT, self._dbus)
+        mgr.reinstall(parent_window=self)
+
 
 class Application(Adw.Application):
     def __init__(self) -> None:
         super().__init__(application_id=APP_ID)
         self.connect("activate", self._on_activate)
+        self._dbus_client = DBusClient()
 
     def _on_activate(self, _app: "Application") -> None:
-        win = MainWindow(application=self)
+        win = MainWindow(application=self, dbus_client=self._dbus_client)
         win.present()
+        GLib.idle_add(self._bootstrap_companion, win)
+
+    def _bootstrap_companion(self, win: MainWindow) -> bool:
+        mgr = CompanionManager(_PROJECT_ROOT, self._dbus_client)
+        mgr.ensure_installed(parent_window=win)
+        return GLib.SOURCE_REMOVE
 
 
 def main() -> None:

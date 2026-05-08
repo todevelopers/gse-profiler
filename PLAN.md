@@ -29,33 +29,33 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 1: Extension Manager
+## Phase 1: Extension Manager ✅
 
 **Goal:** Users can see all installed extensions and toggle them.
 
-- [ ] `app/core/dbus_client.py`
+- [x] `app/core/dbus_client.py`
   - Async `Gio.DBusProxy` wrapper for `org.gnome.Shell.Extensions`
   - Methods: `list_extensions()`, `enable_extension(uuid)`, `disable_extension(uuid)`
   - Properties per extension: name, UUID, version, state, path, error
-- [ ] Extension list UI
+- [x] Extension list UI
   - `AdwPreferencesGroup` with `AdwActionRow` per extension, or `GtkListView`
   - State badge: enabled (green) / disabled (grey) / error (red)
   - Toggle switch → D-Bus call
-- [ ] "Open folder" action — `Gio.AppInfo.launch_default_for_uri("file://...")`
-- [ ] Refresh button + auto-refresh on D-Bus property change signal
+- [x] "Open folder" action — `Gio.AppInfo.launch_default_for_uri("file://...")`
+- [x] Refresh button + auto-refresh on D-Bus property change signal
 
 ### Companion extension bootstrap
 
-- [ ] On app launch: check whether `gse-profiler-bridge@todevelopers` is installed
+- [x] On app launch: check whether `gse-profiler-bridge@todevelopers` is installed
   - If not installed → copy `companion-extension/` to `~/.local/share/gnome-shell/extensions/gse-profiler-bridge@todevelopers/`
   - After copy → run `scripts/restart-shell.sh` in subprocess (prompts user on Wayland: logout required)
-- [ ] After install (or if already installed but disabled) → call `enable_extension(COMPANION_UUID)` via D-Bus
-- [ ] "Install / Reinstall companion" action in app menu (manual trigger)
+- [x] After install (or if already installed but disabled) → call `enable_extension(COMPANION_UUID)` via D-Bus
+- [x] "Install / Reinstall companion" action in app menu (manual trigger)
 
 ### Connection status indicators
 
-- [ ] App header bar chip: **Connected** (green) / **Disconnected** (grey) — reflects live Unix socket state
-- [ ] GNOME panel icon in companion extension: `Gio.ThemedIcon` shown when extension is running, hidden on `disable()` (no menu in V1)
+- [x] App header bar chip: **Connected** (green) / **Disconnected** (grey) — reflects live Unix socket state
+- [x] GNOME panel icon in companion extension: `Gio.ThemedIcon` shown when extension is running, hidden on `disable()` (no menu in V1)
 
 ---
 
