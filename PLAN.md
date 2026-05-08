@@ -44,6 +44,19 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [ ] "Open folder" action — `Gio.AppInfo.launch_default_for_uri("file://...")`
 - [ ] Refresh button + auto-refresh on D-Bus property change signal
 
+### Companion extension bootstrap
+
+- [ ] On app launch: check whether `gse-profiler-bridge@todevelopers` is installed
+  - If not installed → copy `companion-extension/` to `~/.local/share/gnome-shell/extensions/gse-profiler-bridge@todevelopers/`
+  - After copy → run `scripts/restart-shell.sh` in subprocess (prompts user on Wayland: logout required)
+- [ ] After install (or if already installed but disabled) → call `enable_extension(COMPANION_UUID)` via D-Bus
+- [ ] "Install / Reinstall companion" action in app menu (manual trigger)
+
+### Connection status indicators
+
+- [ ] App header bar chip: **Connected** (green) / **Disconnected** (grey) — reflects live Unix socket state
+- [ ] GNOME panel icon in companion extension: `Gio.ThemedIcon` shown when extension is running, hidden on `disable()` (no menu in V1)
+
 ---
 
 ## Phase 2: Companion Extension + Unix Socket Transport
