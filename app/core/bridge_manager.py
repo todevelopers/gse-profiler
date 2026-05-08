@@ -28,9 +28,9 @@ class BridgeManager:
         self._dbus = dbus_client
 
     def ensure_installed(self, parent_window: Gtk.Window | None = None) -> None:
-        """Install bridge if missing; enable it if installed and known to gnome-shell."""
+        """Prompt to install if missing; enable if already installed and known."""
         if not _INSTALL_PATH.exists():
-            self._do_install(parent_window)
+            self._prompt_install(parent_window)
         elif not self._dbus.is_extension_known(BRIDGE_UUID):
             # Files exist but gnome-shell hasn't loaded them yet (e.g. shell restart
             # was cancelled after a previous install).
@@ -62,6 +62,28 @@ class BridgeManager:
         self._prompt_restart(parent_window, uninstall=True)
 
     # ── Private ───────────────────────────────────────────────────────────
+
+    def _prompt_install(self, parent_window: Gtk.Window | None) -> None:
+        dialog = Adw.AlertDialog.new(
+            "Bridge Extension Required",
+            "GSE Profiler uses a bridge GNOME Shell extension to enable profiling "
+            "and inspection features.\n\n"
+            "The extension will be installed and GNOME Shell will need to restart. "
+            "Install now?",
+        )
+        dialog.add_response("cancel", "Not Now")
+        dialog.add_response("install", "Install")
+        dialog.set_response_appearance("install", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("install")
+        dialog.connect("response", self._on_install_response, parent_window)
+        if parent_window:
+            dialog.present(parent_window)
+
+    def _on_install_response(
+        self, _dialog: Adw.AlertDialog, response: str, parent_window: Gtk.Window | None
+    ) -> None:
+        if response == "install":
+            self._do_install(parent_window)
 
     def _do_install(self, parent_window: Gtk.Window | None) -> None:
         try:
