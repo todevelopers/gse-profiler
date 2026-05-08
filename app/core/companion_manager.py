@@ -34,6 +34,10 @@ class CompanionManager:
         else:
             self._dbus.enable_extension(COMPANION_UUID)
 
+    def deactivate(self) -> None:
+        """Disable the bridge extension without removing it."""
+        self._dbus.disable_extension(COMPANION_UUID)
+
     def reinstall(self, parent_window: Gtk.Window | None = None) -> None:
         """Force-reinstall the companion extension."""
         self._do_install(parent_window)
