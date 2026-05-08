@@ -25,8 +25,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _NAV_ITEMS: list[tuple[str, str, str]] = [
     ("extensions", "Extensions", "application-x-addon-symbolic"),
-    ("logs", "Log Viewer", "text-x-log-symbolic"),
-    ("profiler", "Profiler", "utilities-system-monitor-symbolic"),
+    ("logs", "Log Viewer", "folder-open-symbolic"),
+    ("profiler", "Profiler", "power-profile-performance-symbolic"),
     ("inspector", "Inspector", "edit-find-symbolic"),
 ]
 
