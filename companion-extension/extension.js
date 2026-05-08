@@ -15,7 +15,7 @@ const GSEProfilerIndicator = GObject.registerClass(
         _init() {
             super._init(0.0, 'GSE Profiler Bridge', true);
             this.add_child(new St.Icon({
-                gicon: new Gio.ThemedIcon({ name: 'utilities-system-monitor-symbolic' }),
+                gicon: new Gio.ThemedIcon({ name: ' user-available-symbolic' }),
                 style_class: 'system-status-icon',
             }));
         }
