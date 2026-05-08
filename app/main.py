@@ -75,6 +75,10 @@ class MainWindow(Adw.ApplicationWindow):
         reinstall_action.connect("activate", self._on_reinstall_companion)
         self.add_action(reinstall_action)
 
+        uninstall_action = Gio.SimpleAction.new("uninstall-companion", None)
+        uninstall_action.connect("activate", self._on_uninstall_companion)
+        self.add_action(uninstall_action)
+
     def _build_ui(self) -> None:
         views: dict[str, Gtk.Widget] = {
             "extensions": ExtensionManagerView(self._dbus),
@@ -117,6 +121,7 @@ class MainWindow(Adw.ApplicationWindow):
         section = Gio.Menu()
         section.append("Install Bridge", "win.install-companion")
         section.append("Reinstall Bridge", "win.reinstall-companion")
+        section.append("Uninstall Bridge", "win.uninstall-companion")
         menu.append_section("Bridge Extension", section)
 
         menu_btn = Gtk.MenuButton()
@@ -174,6 +179,10 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_reinstall_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
         mgr = CompanionManager(_PROJECT_ROOT, self._dbus)
         mgr.reinstall(parent_window=self)
+
+    def _on_uninstall_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
+        mgr = CompanionManager(_PROJECT_ROOT, self._dbus)
+        mgr.uninstall(parent_window=self)
 
 
 class Application(Adw.Application):

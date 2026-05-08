@@ -38,6 +38,21 @@ class CompanionManager:
         """Force-reinstall the companion extension."""
         self._do_install(parent_window)
 
+    def uninstall(self, parent_window: Gtk.Window | None = None) -> None:
+        """Disable and remove the bridge extension, then prompt for shell restart."""
+        if not _INSTALL_PATH.exists():
+            _show_error(parent_window, "Bridge extension is not installed.")
+            return
+        self._dbus.disable_extension(COMPANION_UUID)
+        try:
+            shutil.rmtree(_INSTALL_PATH)
+            _log.info("Bridge extension removed from %s", _INSTALL_PATH)
+        except OSError as exc:
+            _log.error("Bridge uninstall failed: %s", exc)
+            _show_error(parent_window, str(exc))
+            return
+        self._prompt_restart(parent_window, uninstall=True)
+
     # ── Private ───────────────────────────────────────────────────────────
 
     def _do_install(self, parent_window: Gtk.Window | None) -> None:
@@ -53,15 +68,16 @@ class CompanionManager:
             return
         self._prompt_restart(parent_window)
 
-    def _prompt_restart(self, parent_window: Gtk.Window | None) -> None:
+    def _prompt_restart(self, parent_window: Gtk.Window | None, *, uninstall: bool = False) -> None:
         wayland = (
             bool(GLib.getenv("WAYLAND_DISPLAY"))
             or GLib.getenv("XDG_SESSION_TYPE") == "wayland"
         )
         if wayland:
+            action = "removed" if uninstall else "installed"
             dialog = Adw.AlertDialog.new(
                 "Shell Restart Required",
-                "The bridge extension was installed.\n\n"
+                f"The bridge extension was {action}.\n\n"
                 "On Wayland, GNOME Shell requires a full logout to reload extensions.\n"
                 "Log out now?",
             )
