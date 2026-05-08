@@ -31,6 +31,8 @@ _TRANSIENT_STATES = {
     ExtensionState.DISABLING,
 }
 
+_ALL_STATE_CSS = {css for _, css in _STATE_LABELS.values() if css}
+
 
 class ExtensionManagerView(Gtk.Box):
     """Extension list with enable/disable toggles and folder access."""
@@ -39,6 +41,7 @@ class ExtensionManagerView(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._dbus = dbus_client
         self._rows: dict[str, Adw.ActionRow] = {}
+        self._row_extras: dict[str, tuple[Gtk.Label, Gtk.Switch]] = {}
         self._build_ui()
         dbus_client.connect("extensions-changed", self._on_extensions_changed)
         dbus_client.connect("operation-error", self._on_operation_error)
@@ -71,18 +74,31 @@ class ExtensionManagerView(Gtk.Box):
     # ── Signal handlers ───────────────────────────────────────────────────
 
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict) -> None:
-        # Remove all existing rows
-        for row in self._rows.values():
-            self._group.remove(row)
-        self._rows.clear()
+        current_uuids = set(self._rows)
+        new_uuids = set(extensions)
 
-        if not extensions:
-            self._empty_row.set_visible(True)
-            return
+        if current_uuids != new_uuids:
+            # Set of extensions changed — full rebuild to keep sorted order.
+            for row in self._rows.values():
+                self._group.remove(row)
+            self._rows.clear()
+            self._row_extras.clear()
 
-        self._empty_row.set_visible(False)
-        for uuid, info in sorted(extensions.items(), key=lambda kv: kv[1]["name"].lower()):
-            self._add_row(uuid, info)
+            if not extensions:
+                self._empty_row.set_visible(True)
+                return
+
+            self._empty_row.set_visible(False)
+            for uuid, info in sorted(extensions.items(), key=lambda kv: kv[1]["name"].lower()):
+                self._add_row(uuid, info)
+        else:
+            # Same extensions — update state badges and switches in-place.
+            if not extensions:
+                self._empty_row.set_visible(True)
+                return
+            self._empty_row.set_visible(False)
+            for uuid, info in extensions.items():
+                self._refresh_row(uuid, info)
 
     def _on_operation_error(self, _dbus: DBusClient, uuid: str, message: str) -> None:
         _log.warning("Extension operation failed [%s]: %s", uuid, message)
@@ -94,11 +110,9 @@ class ExtensionManagerView(Gtk.Box):
         row.set_title(info["name"])
         row.set_subtitle(uuid)
 
-        # State badge
         badge = _make_state_badge(info["state"], info.get("error", ""))
         row.add_suffix(badge)
 
-        # Open folder button (only when path is known)
         if info.get("path"):
             open_btn = Gtk.Button(icon_name="folder-open-symbolic")
             open_btn.add_css_class("flat")
@@ -108,7 +122,6 @@ class ExtensionManagerView(Gtk.Box):
             open_btn.connect("clicked", lambda _, p=path: _open_folder(p))
             row.add_suffix(open_btn)
 
-        # Toggle switch
         switch = Gtk.Switch()
         switch.set_valign(Gtk.Align.CENTER)
         switch.set_active(info["state"] == ExtensionState.ENABLED)
@@ -119,6 +132,25 @@ class ExtensionManagerView(Gtk.Box):
 
         self._group.add(row)
         self._rows[uuid] = row
+        self._row_extras[uuid] = (badge, switch)
+
+    def _refresh_row(self, uuid: str, info: dict) -> None:
+        """Update badge and switch on an existing row without recreating widgets."""
+        badge, switch = self._row_extras[uuid]
+        state = info["state"]
+        text, css = _STATE_LABELS.get(state, ("Unknown", "dim-label"))
+
+        badge.set_text(text)
+        for cls in _ALL_STATE_CSS:
+            badge.remove_css_class(cls)
+        if css:
+            badge.add_css_class(css)
+        badge.set_tooltip_text(info.get("error", "") if state == ExtensionState.ERROR else "")
+
+        switch.handler_block_by_func(self._on_switch_toggled)
+        switch.set_active(state == ExtensionState.ENABLED)
+        switch.set_sensitive(state not in _TRANSIENT_STATES)
+        switch.handler_unblock_by_func(self._on_switch_toggled)
 
     def _on_switch_toggled(self, switch: Gtk.Switch, _pspec: object, uuid: str) -> None:
         if switch.get_active():
