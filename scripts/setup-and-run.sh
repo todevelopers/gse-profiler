@@ -52,6 +52,16 @@ fi
 
 success "Repository is up to date."
 
+# ── Desktop integration ────────────────────────────────────────────────────────
+DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+mkdir -p "$DESKTOP_DIR"
+sed "s|@INSTALL_DIR@|$INSTALL_DIR|g" \
+    "$INSTALL_DIR/app/data/gse-profiler.desktop.in" \
+    > "$DESKTOP_DIR/gse-profiler.desktop"
+command -v update-desktop-database &>/dev/null && \
+    update-desktop-database "$DESKTOP_DIR"
+success "Desktop entry installed — GSE Profiler is now in the app launcher."
+
 # ── Launch ─────────────────────────────────────────────────────────────────────
 info "Starting GSE Profiler…"
 exec python3 "$INSTALL_DIR/app/main.py"
