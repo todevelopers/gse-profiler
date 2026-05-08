@@ -11,7 +11,7 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, GLib, Gtk
 
-from app.core.dbus_client import DBusClient
+from app.core.dbus_client import DBusClient, ExtensionState
 
 _log = logging.getLogger(__name__)
 
@@ -58,14 +58,40 @@ class BridgeManager:
         self._do_install(parent_window)
 
     def uninstall(self, parent_window: Gtk.Window | None = None) -> None:
-        """Disable and remove the bridge extension, then prompt for shell restart."""
+        """Disable and remove the bridge extension, then prompt for shell restart.
+
+        Disable runs asynchronously; the directory is removed only after the
+        D-Bus call completes so the bridge has a chance to clean up its socket
+        and indicator before its files disappear.
+        """
         if not _INSTALL_PATH.exists():
             _show_error(parent_window, "Bridge extension is not installed.")
             return
-        self._dbus.disable_extension(BRIDGE_UUID)
+
+        state = self._dbus.get_extension_state(BRIDGE_UUID)
+        if state is None or state == ExtensionState.DISABLED:
+            self._finish_uninstall(parent_window, error=None)
+            return
+
+        self._dbus.disable_extension(
+            BRIDGE_UUID,
+            on_done=lambda err: self._finish_uninstall(parent_window, error=err),
+        )
+
+    def _finish_uninstall(
+        self, parent_window: Gtk.Window | None, error: GLib.Error | None
+    ) -> None:
+        if error is not None:
+            _log.warning(
+                "Disable of %s failed before uninstall (%s); removing anyway",
+                BRIDGE_UUID,
+                error,
+            )
         try:
             shutil.rmtree(_INSTALL_PATH)
             _log.info("Bridge extension removed from %s", _INSTALL_PATH)
+        except FileNotFoundError:
+            pass
         except OSError as exc:
             _log.error("Bridge uninstall failed: %s", exc)
             _show_error(parent_window, str(exc))

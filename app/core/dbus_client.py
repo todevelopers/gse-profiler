@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import gi
@@ -83,11 +84,19 @@ class DBusClient(GObject.Object):
         signal_name: str,
         parameters: GLib.Variant,
     ) -> None:
-        if signal_name == "ExtensionStateChanged":
-            uuid, new_state = parameters.unpack()
-            if uuid in self._extensions:
-                self._extensions[uuid]["state"] = int(new_state)
-            self.emit("extensions-changed", dict(self._extensions))
+        if signal_name != "ExtensionStateChanged":
+            return
+        # Signature is (sa{sv}) — uuid + full state-info dict, not (s, u).
+        # Treating the dict as an int raised TypeError and aborted the handler
+        # before extensions-changed was emitted, so the UI never saw the
+        # Disabling → Disabled transition (the bridge toggle appeared frozen).
+        uuid, info = parameters.unpack()
+        new_state = int(info.get("state", ExtensionState.UNINSTALLED))
+        if new_state == ExtensionState.UNINSTALLED:
+            self._extensions.pop(uuid, None)
+        else:
+            self._extensions[uuid] = _parse_info(uuid, info)
+        self.emit("extensions-changed", dict(self._extensions))
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -105,22 +114,46 @@ class DBusClient(GObject.Object):
             None,
         )
 
-    def enable_extension(self, uuid: str) -> None:
-        """Async-enable extension; refreshes list on success."""
-        self._call_toggle("EnableExtension", uuid)
+    def enable_extension(
+        self, uuid: str, on_done: Callable[[GLib.Error | None], None] | None = None
+    ) -> None:
+        """Async-enable extension; refreshes list on success.
 
-    def disable_extension(self, uuid: str) -> None:
-        """Async-disable extension; refreshes list on success."""
-        self._call_toggle("DisableExtension", uuid)
+        If `on_done` is provided, it is invoked when the call completes, with
+        the GLib.Error on failure or None on success.
+        """
+        self._call_toggle("EnableExtension", uuid, on_done)
+
+    def disable_extension(
+        self, uuid: str, on_done: Callable[[GLib.Error | None], None] | None = None
+    ) -> None:
+        """Async-disable extension; refreshes list on success.
+
+        If `on_done` is provided, it is invoked when the call completes, with
+        the GLib.Error on failure or None on success.
+        """
+        self._call_toggle("DisableExtension", uuid, on_done)
 
     def is_extension_known(self, uuid: str) -> bool:
         """Return True if gnome-shell has this extension in its registry."""
         return uuid in self._extensions
 
+    def get_extension_state(self, uuid: str) -> int | None:
+        """Return cached extension state, or None if unknown."""
+        info = self._extensions.get(uuid)
+        return int(info["state"]) if info else None
+
     # ── Private helpers ───────────────────────────────────────────────────
 
-    def _call_toggle(self, method: str, uuid: str) -> None:
+    def _call_toggle(
+        self,
+        method: str,
+        uuid: str,
+        on_done: Callable[[GLib.Error | None], None] | None = None,
+    ) -> None:
         if self._proxy is None:
+            if on_done:
+                on_done(GLib.Error("D-Bus proxy not ready"))
             return
         self._proxy.call(
             method,
@@ -129,21 +162,25 @@ class DBusClient(GObject.Object):
             -1,
             None,
             self._on_toggle_done,
-            uuid,
+            (uuid, on_done),
         )
 
     def _on_toggle_done(
         self,
         proxy: Gio.DBusProxy,
         result: Gio.AsyncResult,
-        uuid: str,
+        user_data: tuple[str, Callable[[GLib.Error | None], None] | None],
     ) -> None:
+        uuid, on_done = user_data
+        error: GLib.Error | None = None
         try:
             proxy.call_finish(result)
         except GLib.Error as exc:
+            error = exc
             _log.error("Toggle %s failed: %s", uuid, exc)
             self.emit("operation-error", uuid, str(exc))
-            return
+        if on_done is not None:
+            on_done(error)
         GLib.idle_add(self.list_extensions)
 
     def _on_list_done(

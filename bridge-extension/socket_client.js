@@ -35,19 +35,29 @@ export class SocketClient {
         this.#scheduleConnect(0);
     }
 
-    /** Stop connecting / disconnect and cancel any pending reconnect. */
+    /** Stop connecting / disconnect and cancel any pending reconnect.
+     *  Close runs asynchronously so the caller (extension `disable()`)
+     *  never blocks gnome-shell's main loop on socket teardown.
+     */
     disconnect() {
         this.#stopping = true;
         this.#connected = false;
         this.#cancelReconnect();
-        if (this.#connection) {
+        const conn = this.#connection;
+        this.#connection = null;
+        this.#outputStream = null;
+        if (conn) {
             try {
-                this.#connection.close(null);
+                conn.close_async(GLib.PRIORITY_DEFAULT, null, (obj, result) => {
+                    try {
+                        obj.close_finish(result);
+                    } catch (_e) {
+                        // already gone — ignore
+                    }
+                });
             } catch (_e) {
                 // ignore — socket may already be gone
             }
-            this.#connection = null;
-            this.#outputStream = null;
         }
     }
 
