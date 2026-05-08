@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restart GNOME Shell after companion extension install/update.
+# Restart GNOME Shell after bridge extension install/update.
 #
 # X11:     uses busctl to call Meta.restart() via org.gnome.Shell
 # Wayland: uses gnome-session-quit (requires re-login)

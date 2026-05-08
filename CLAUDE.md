@@ -3,10 +3,10 @@
 ## Project Overview
 
 GTK4 desktop application for **managing, debugging, and profiling GNOME Shell extensions**.
-Targets GNOME Shell extension developers. Internally installs a companion GJS extension that acts as a bridge into the `gnome-shell` process.
+Targets GNOME Shell extension developers. Internally installs a bridge GJS extension that acts as a bridge into the `gnome-shell` process.
 
 **Target platform:** GNOME 48+  
-**Languages:** Python 3.11+ (app), GJS / ES6 (companion extension + developer API)
+**Languages:** Python 3.11+ (app), GJS / ES6 (bridge extension + developer API)
 
 ---
 
@@ -17,7 +17,7 @@ GTK4 App (Python/PyGObject)
          │
          ├─ D-Bus ──────────────► org.gnome.Shell.Extensions  (list / enable / disable)
          │
-         └─ Unix Socket (JSON) ──► Companion Extension (GJS)
+         └─ Unix Socket (JSON) ──► Bridge Extension (GJS)
                                          │
                                          ├── Target extension   (monkey-patch, inspect)
                                          ├── Core gnome-shell   (optional)
@@ -27,7 +27,7 @@ GTK4 App (Python/PyGObject)
 Communication split:
 
 - **D-Bus** — standard GNOME Shell APIs (extensions list, enable/disable)  
-- **Unix socket** — all custom high-frequency communication with the companion
+- **Unix socket** — all custom high-frequency communication with the bridge
 
 Socket path: `$XDG_RUNTIME_DIR/gse-profiler.sock`  
 Protocol: newline-delimited JSON messages
@@ -51,7 +51,7 @@ gse-profiler/
 │   │   ├── git_manager.py
 │   │   └── journal_reader.py
 │   └── data/ui/                # Glade .ui files (if needed)
-├── companion-extension/        # GJS GNOME Shell extension
+├── bridge-extension/        # GJS GNOME Shell extension
 │   ├── extension.js
 │   ├── profiler.js
 │   ├── inspector.js
@@ -66,7 +66,7 @@ gse-profiler/
 
 ---
 
-## Companion Extension
+## Bridge Extension
 
 - **UUID:** `gse-profiler-bridge@todevelopers`
 - **Install path:** `~/.local/share/gnome-shell/extensions/gse-profiler-bridge@todevelopers/`
@@ -93,7 +93,7 @@ gse-profiler/
 - Unix socket I/O: async via `GLib.IOChannel` or `asyncio` with GLib event loop integration
 - No hardcoded paths — use `GLib.get_user_data_dir()`, `GLib.get_runtime_dir()`, etc.
 
-### GJS (`companion-extension/`, `api/`)
+### GJS (`bridge-extension/`, `api/`)
 
 - ES6 module syntax (`import` / `export`), strict mode (`'use strict'`)
 - Use GNOME GJS bindings (`imports.gi.*` or `gi://` depending on GNOME version)
@@ -122,6 +122,6 @@ gse-profiler/
 
 1. **Never block the GTK main loop** — all I/O must be async or run in a thread.
 2. **Wayland first** — never assume X11; shell eval path is a fallback, not the default.
-3. **opt-in API must be side-effect free when not connected** — all `DevToolsClient` methods must silently no-op when the companion socket is unavailable.
-4. **Companion lifecycle** — always call `disable()` cleanup: disconnect signals, close socket, remove monkey-patches.
+3. **opt-in API must be side-effect free when not connected** — all `DevToolsClient` methods must silently no-op when the bridge socket is unavailable.
+4. **Bridge lifecycle** — always call `disable()` cleanup: disconnect signals, close socket, remove monkey-patches.
 5. **Tests live in `tests/`** — use `pytest`; mock D-Bus and subprocess in unit tests.

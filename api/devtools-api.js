@@ -28,15 +28,15 @@ export class DevToolsClient {
     #uuid = null;
 
     /**
-     * Connect to the GSE Profiler companion extension.
+     * Connect to the GSE Profiler bridge extension.
      * @param {string} uuid - Your extension's UUID.
      */
     connect(uuid) {
         this.#uuid = uuid;
-        // Phase 7: locate and connect to companion socket
+        // Phase 7: locate and connect to bridge socket
     }
 
-    /** Disconnect from the companion. */
+    /** Disconnect from the bridge. */
     disconnect() {
         this.#connected = false;
         this.#uuid = null;

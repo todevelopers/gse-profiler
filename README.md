@@ -43,15 +43,15 @@ GTK4 App (Python/PyGObject)
          ├─ D-Bus ──────────────► org.gnome.Shell.Extensions
          │                        (list / enable / disable)
          │
-         └─ Unix Socket (JSON) ──► Companion Extension (GJS)
+         └─ Unix Socket (JSON) ──► Bridge Extension (GJS)
                                          │
                                          ├── Target extension   (monkey-patch, inspect)
                                          ├── Core gnome-shell   (optional)
                                          └── opt-in API bridge
 ```
 
-The app auto-installs a **companion GJS extension** (`gse-profiler-bridge`) into
-`~/.local/share/gnome-shell/extensions/`. The companion runs inside the `gnome-shell` process
+The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge`) into
+`~/.local/share/gnome-shell/extensions/`. The bridge runs inside the `gnome-shell` process
 and is responsible for monkey-patching, log interception, object inspection, and the developer
 API bridge. It communicates back to the app over a Unix socket using newline-delimited JSON.
 
@@ -102,19 +102,19 @@ pip install --user PyGObject
 python3 app/main.py
 ```
 
-On first launch the app will offer to install the companion extension and restart GNOME Shell.
+On first launch the app will offer to install the bridge extension and restart GNOME Shell.
 
 ---
 
-## Companion Extension
+## Bridge Extension
 
-The companion extension is bundled in `companion-extension/` and **auto-installed** by the
+The bridge extension is bundled in `bridge-extension/` and **auto-installed** by the
 application — no manual steps needed. After installation, GNOME Shell must be restarted:
 
 - **Wayland** — the app will prompt you to log out and log back in
 - **X11** — automatic restart via `Meta.restart()` over D-Bus
 
-The companion shows a small status indicator in the GNOME panel to confirm it is active.
+The bridge shows a small status indicator in the GNOME panel to confirm it is active.
 The main app window also shows a connection indicator (connected / disconnected).
 
 ---
@@ -159,7 +159,7 @@ gse-profiler/
 │   │   ├── git_manager.py      # git clone / pull subprocess wrapper
 │   │   └── journal_reader.py   # journalctl --follow subprocess
 │   └── data/ui/                # Glade .ui files (optional)
-├── companion-extension/        # GJS GNOME Shell extension (bridge)
+├── bridge-extension/        # GJS GNOME Shell extension (bridge)
 │   ├── extension.js
 │   ├── profiler.js
 │   ├── inspector.js
@@ -178,7 +178,7 @@ gse-profiler/
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run linters before committing: `ruff check app/` and `eslint companion-extension/ api/`
+3. Run linters before committing: `ruff check app/` and `eslint bridge-extension/ api/`
 4. Run tests: `pytest tests/`
 5. Open a pull request
 

@@ -12,7 +12,7 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from app.core.companion_manager import CompanionManager
+from app.core.bridge_manager import BridgeManager
 from app.core.dbus_client import DBusClient
 from app.core.socket_server import SocketServer
 from app.ui.extension_manager import ExtensionManagerView
@@ -54,13 +54,13 @@ class MainWindow(Adw.ApplicationWindow):
         self,
         dbus_client: DBusClient,
         socket_server: SocketServer,
-        companion: CompanionManager,
+        bridge: BridgeManager,
         **kwargs: object,
     ) -> None:
         super().__init__(**kwargs)
         self._dbus = dbus_client
         self._socket = socket_server
-        self._companion = companion
+        self._bridge = bridge
         self.set_title("GSE Profiler")
         self.set_default_size(1100, 720)
         self._register_actions()
@@ -69,16 +69,16 @@ class MainWindow(Adw.ApplicationWindow):
         socket_server.connect("client-disconnected", self._on_client_disconnected)
 
     def _register_actions(self) -> None:
-        install_action = Gio.SimpleAction.new("install-companion", None)
-        install_action.connect("activate", self._on_install_companion)
+        install_action = Gio.SimpleAction.new("install-bridge", None)
+        install_action.connect("activate", self._on_install_bridge)
         self.add_action(install_action)
 
-        reinstall_action = Gio.SimpleAction.new("reinstall-companion", None)
-        reinstall_action.connect("activate", self._on_reinstall_companion)
+        reinstall_action = Gio.SimpleAction.new("reinstall-bridge", None)
+        reinstall_action.connect("activate", self._on_reinstall_bridge)
         self.add_action(reinstall_action)
 
-        uninstall_action = Gio.SimpleAction.new("uninstall-companion", None)
-        uninstall_action.connect("activate", self._on_uninstall_companion)
+        uninstall_action = Gio.SimpleAction.new("uninstall-bridge", None)
+        uninstall_action.connect("activate", self._on_uninstall_bridge)
         self.add_action(uninstall_action)
 
     def _build_ui(self) -> None:
@@ -121,9 +121,9 @@ class MainWindow(Adw.ApplicationWindow):
         # App menu
         menu = Gio.Menu()
         section = Gio.Menu()
-        section.append("Install Bridge", "win.install-companion")
-        section.append("Reinstall Bridge", "win.reinstall-companion")
-        section.append("Uninstall Bridge", "win.uninstall-companion")
+        section.append("Install Bridge", "win.install-bridge")
+        section.append("Reinstall Bridge", "win.reinstall-bridge")
+        section.append("Uninstall Bridge", "win.uninstall-bridge")
         menu.append_section("Bridge Extension", section)
 
         menu_btn = Gtk.MenuButton()
@@ -174,14 +174,14 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(False)
 
-    def _on_install_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
-        self._companion.ensure_installed(parent_window=self)
+    def _on_install_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self._bridge.ensure_installed(parent_window=self)
 
-    def _on_reinstall_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
-        self._companion.reinstall(parent_window=self)
+    def _on_reinstall_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self._bridge.reinstall(parent_window=self)
 
-    def _on_uninstall_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
-        self._companion.uninstall(parent_window=self)
+    def _on_uninstall_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self._bridge.uninstall(parent_window=self)
 
 
 class Application(Adw.Application):
@@ -190,7 +190,7 @@ class Application(Adw.Application):
         self.connect("activate", self._on_activate)
         self._dbus_client = DBusClient()
         self._socket_server = SocketServer()
-        self._companion = CompanionManager(_PROJECT_ROOT, self._dbus_client)
+        self._bridge = BridgeManager(_PROJECT_ROOT, self._dbus_client)
 
     def _on_activate(self, _app: "Application") -> None:
         self._socket_server.start()
@@ -198,18 +198,18 @@ class Application(Adw.Application):
             application=self,
             dbus_client=self._dbus_client,
             socket_server=self._socket_server,
-            companion=self._companion,
+            bridge=self._bridge,
         )
         win.present()
-        GLib.idle_add(self._bootstrap_companion, win)
+        GLib.idle_add(self._bootstrap_bridge, win)
 
     def do_shutdown(self) -> None:
-        self._companion.deactivate()
+        self._bridge.deactivate()
         self._socket_server.stop()
         Adw.Application.do_shutdown(self)
 
-    def _bootstrap_companion(self, win: MainWindow) -> bool:
-        self._companion.ensure_installed(parent_window=win)
+    def _bootstrap_bridge(self, win: MainWindow) -> bool:
+        self._bridge.ensure_installed(parent_window=win)
         return False
 
 

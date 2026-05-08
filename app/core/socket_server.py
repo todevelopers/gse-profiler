@@ -19,7 +19,7 @@ def _socket_path() -> str:
 
 
 class SocketServer(GObject.Object):
-    """Async Unix socket server for companion extension communication.
+    """Async Unix socket server for bridge extension communication.
 
     Socket path: $XDG_RUNTIME_DIR/gse-profiler.sock
     Protocol: newline-delimited JSON messages.
@@ -79,7 +79,7 @@ class SocketServer(GObject.Object):
         _unlink_socket(_socket_path())
 
     def send(self, message: dict[str, Any]) -> None:
-        """Send a JSON message to the companion extension."""
+        """Send a JSON message to the bridge extension."""
         if not self._output:
             return
         try:
@@ -97,7 +97,7 @@ class SocketServer(GObject.Object):
         connection: Gio.SocketConnection,
         _source: object,
     ) -> bool:
-        _log.info("Companion connected")
+        _log.info("Bridge connected")
         self._cancellable = Gio.Cancellable.new()
         self._output = Gio.DataOutputStream.new(connection.get_output_stream())
 
@@ -126,13 +126,13 @@ class SocketServer(GObject.Object):
             line_bytes, _length = stream.read_line_finish(result)
         except GLib.Error as exc:
             if not exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.CANCELLED):
-                _log.info("Companion read error: %s", exc)
+                _log.info("Bridge read error: %s", exc)
             self._output = None
             self.emit("client-disconnected")
             return
 
         if line_bytes is None:
-            _log.info("Companion disconnected (EOF)")
+            _log.info("Bridge disconnected (EOF)")
             self._output = None
             self.emit("client-disconnected")
             return
@@ -143,7 +143,7 @@ class SocketServer(GObject.Object):
                 msg = json.loads(line)
                 self._dispatch(msg)
             except json.JSONDecodeError as exc:
-                _log.warning("Invalid JSON from companion: %s — %r", exc, line)
+                _log.warning("Invalid JSON from bridge: %s — %r", exc, line)
 
         self._read_next(stream)
 
@@ -151,7 +151,7 @@ class SocketServer(GObject.Object):
         msg_type = msg.get("type")
         if msg_type == "hello":
             _log.info(
-                "Handshake received: companion v%s uuid=%s",
+                "Handshake received: bridge v%s uuid=%s",
                 msg.get("version"),
                 msg.get("uuid"),
             )

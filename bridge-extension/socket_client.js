@@ -20,7 +20,7 @@ export class SocketClient {
     #reconnectSource = null;
 
     /**
-     * @param {string} uuid - companion extension UUID for the handshake
+     * @param {string} uuid - bridge extension UUID for the handshake
      * @param {(msg: object) => void} [onMessage] - callback for incoming messages
      */
     constructor(uuid, onMessage = null) {

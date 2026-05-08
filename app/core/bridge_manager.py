@@ -15,31 +15,31 @@ from app.core.dbus_client import DBusClient
 
 _log = logging.getLogger(__name__)
 
-COMPANION_UUID = "gse-profiler-bridge@todevelopers"
-_INSTALL_PATH = Path(GLib.get_user_data_dir()) / "gnome-shell" / "extensions" / COMPANION_UUID
+BRIDGE_UUID = "gse-profiler-bridge@todevelopers"
+_INSTALL_PATH = Path(GLib.get_user_data_dir()) / "gnome-shell" / "extensions" / BRIDGE_UUID
 
 
-class CompanionManager:
-    """Manages installation and lifecycle of the companion GNOME Shell extension."""
+class BridgeManager:
+    """Manages installation and lifecycle of the bridge GNOME Shell extension."""
 
     def __init__(self, project_root: Path, dbus_client: DBusClient) -> None:
         self._root = project_root
-        self._source = project_root / "companion-extension"
+        self._source = project_root / "bridge-extension"
         self._dbus = dbus_client
 
     def ensure_installed(self, parent_window: Gtk.Window | None = None) -> None:
-        """Install companion if missing; enable it if already installed but disabled."""
+        """Install bridge if missing; enable it if already installed but disabled."""
         if not _INSTALL_PATH.exists():
             self._do_install(parent_window)
         else:
-            self._dbus.enable_extension(COMPANION_UUID)
+            self._dbus.enable_extension(BRIDGE_UUID)
 
     def deactivate(self) -> None:
         """Disable the bridge extension without removing it."""
-        self._dbus.disable_extension(COMPANION_UUID)
+        self._dbus.disable_extension(BRIDGE_UUID)
 
     def reinstall(self, parent_window: Gtk.Window | None = None) -> None:
-        """Force-reinstall the companion extension."""
+        """Force-reinstall the bridge extension."""
         self._do_install(parent_window)
 
     def uninstall(self, parent_window: Gtk.Window | None = None) -> None:
@@ -47,7 +47,7 @@ class CompanionManager:
         if not _INSTALL_PATH.exists():
             _show_error(parent_window, "Bridge extension is not installed.")
             return
-        self._dbus.disable_extension(COMPANION_UUID)
+        self._dbus.disable_extension(BRIDGE_UUID)
         try:
             shutil.rmtree(_INSTALL_PATH)
             _log.info("Bridge extension removed from %s", _INSTALL_PATH)
@@ -65,9 +65,9 @@ class CompanionManager:
                 shutil.rmtree(_INSTALL_PATH)
             _INSTALL_PATH.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(self._source, _INSTALL_PATH)
-            _log.info("Companion installed to %s", _INSTALL_PATH)
+            _log.info("Bridge installed to %s", _INSTALL_PATH)
         except OSError as exc:
-            _log.error("Companion install failed: %s", exc)
+            _log.error("Bridge install failed: %s", exc)
             _show_error(parent_window, str(exc))
             return
         self._prompt_restart(parent_window)

@@ -15,7 +15,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [x] `app/main.py` — `Adw.Application` + `Adw.ApplicationWindow` with `Adw.OverlaySplitView`
 - [x] Sidebar navigation (`Adw.OverlaySplitView` + `GtkListBox` with `navigation-sidebar` class)
 - [x] Placeholder views for each section (`Adw.StatusPage` per view)
-- [x] `companion-extension/metadata.json` — companion extension scaffold
+- [x] `bridge-extension/metadata.json` — Bridge extension scaffold
 - [x] `app/core/` stubs — `DBusClient`, `SocketServer`, `GitManager`, `JournalReader`
 - [x] `api/devtools-api.js` — `DevToolsClient` skeleton with JSDoc
 - [x] `scripts/restart-shell.sh` — X11/Wayland aware shell restart
@@ -25,7 +25,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 - [x] **`ci.yml`** — ruff · mypy · pytest · eslint on every push and PR to `main`
 - [x] **`release.yml`** — tarball + changelog on `v*` tag push
-- [x] **`companion-test.yml`** — ESLint on changes to `companion-extension/` or `api/`
+- [x] **`bridge-test.yml`** — ESLint on changes to `bridge-extension/` or `api/`
 
 ---
 
@@ -44,30 +44,30 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [x] "Open folder" action — `Gio.AppInfo.launch_default_for_uri("file://...")`
 - [x] Refresh button + auto-refresh on D-Bus property change signal
 
-### Companion extension bootstrap
+### Bridge extension bootstrap
 
 - [x] On app launch: check whether `gse-profiler-bridge@todevelopers` is installed
-  - If not installed → copy `companion-extension/` to `~/.local/share/gnome-shell/extensions/gse-profiler-bridge@todevelopers/`
+  - If not installed → copy `bridge-extension/` to `~/.local/share/gnome-shell/extensions/gse-profiler-bridge@todevelopers/`
   - After copy → run `scripts/restart-shell.sh` in subprocess (prompts user on Wayland: logout required)
-- [x] After install (or if already installed but disabled) → call `enable_extension(COMPANION_UUID)` via D-Bus
-- [x] "Install / Reinstall companion" action in app menu (manual trigger)
+- [x] After install (or if already installed but disabled) → call `enable_extension(BRIDGE_UUID)` via D-Bus
+- [x] "Install / Reinstall bridge" action in app menu (manual trigger)
 
 ### Connection status indicators
 
 - [x] App header bar chip: **Connected** (green) / **Disconnected** (grey) — reflects live Unix socket state
-- [x] GNOME panel icon in companion extension: `Gio.ThemedIcon` shown when extension is running, hidden on `disable()` (no menu in V1)
+- [x] GNOME panel icon in Bridge extension: `Gio.ThemedIcon` shown when extension is running, hidden on `disable()` (no menu in V1)
 
 ---
 
-## Phase 2: Companion Extension + Unix Socket Transport ✅
+## Phase 2: Bridge extension + Unix Socket Transport ✅
 
-**Goal:** App and companion can exchange messages reliably.
+**Goal:** App and bridge can exchange messages reliably.
 
-### Companion extension
+### Bridge extension
 
 - [x] `extension.js` — `enable()` / `disable()` lifecycle
 - [x] `socket_client.js` — connect to `$XDG_RUNTIME_DIR/gse-profiler.sock`, reconnect loop
-- [x] Handshake message `{ type: "hello", version: "1", uuid: COMPANION_UUID }`
+- [x] Handshake message `{ type: "hello", version: "1", uuid: BRIDGE_UUID }`
 - [x] GNOME panel indicator (simple icon from `Gio.ThemedIcon`, no menu in V1)
 
 ### App side
@@ -75,10 +75,10 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [x] `app/core/socket_server.py` — async Unix socket server, `Gio.SocketService`
 - [x] Message router — dispatch incoming JSON messages to the right subsystem
 - [x] Auto-install logic:
-  - Copy `companion-extension/` to install path
+  - Copy `bridge-extension/` to install path
   - Run `scripts/restart-shell.sh` in a subprocess
 - [x] Connection status indicator in app header bar (connected / disconnected chip)
-- [x] "Install / Reinstall companion" action in app menu
+- [x] "Install / Reinstall bridge" action in app menu
 - [x] Reinstall prompts shell restart
 
 ---
@@ -106,9 +106,9 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 **Goal:** Live function timing for a selected extension.
 
-### Companion side
+### Bridge side
 
-- [ ] `companion-extension/profiler.js`
+- [ ] `bridge-extension/profiler.js`
   - `startProfiling(uuid)` — monkey-patch all functions on extension's exported object
   - Record: function name, call depth, start timestamp (µs), end timestamp
   - Emit events via socket: `{ type: "profile_event", extensionUuid, function, start, end, depth }`
@@ -130,9 +130,9 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 **Goal:** Live access to extension `stateObj` properties and methods.
 
-### Companion side
+### Bridge side
 
-- [ ] `companion-extension/inspector.js`
+- [ ] `bridge-extension/inspector.js`
   - `inspect(uuid)` — get reference to extension's `stateObj`
   - Enumerate own properties + prototype chain (1 level)
   - Serialize: `{ name, type, value, writable }` — handle functions, circular refs, symbols
@@ -171,14 +171,14 @@ Phases 8–12 go beyond V1 with constructive additions.
 **Goal:** Extension developers can integrate for deeper profiling.
 
 - [ ] `api/devtools-api.js` — `DevToolsClient` class
-  - `connect(uuid)` — find and connect to companion socket
+  - `connect(uuid)` — find and connect to bridge socket
   - `disconnect()`
   - `mark(name)` — timestamp marker
   - `measure(name, startMark, endMark)` — range from two marks
   - `counter(name, value)` — increment custom metric
   - `watch(object, properties)` — emit event on property change
   - All methods: silent no-op when not connected (no exceptions thrown)
-- [ ] Companion routes `devtools_*` message types to profiler subsystem
+- [ ] Bridge routes `devtools_*` message types to profiler subsystem
 - [ ] App Profiler view displays API-originated events distinctly (different color)
 - [ ] JSDoc comments on all public API methods
 - [ ] README section: "opt-in Developer API" with copy-paste example
@@ -207,7 +207,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 **Goal:** Heap snapshots and allocation tracking.
 
-- [ ] Companion: expose SpiderMonkey heap stats via GJS `System.gc()` + memory counters
+- [ ] Bridge: expose SpiderMonkey heap stats via GJS `System.gc()` + memory counters
 - [ ] Memory timeline chart — heap size over time (`Gtk.DrawingArea` + Cairo)
 - [ ] Object count table by constructor name
 - [ ] Snapshot diff: compare two snapshots, highlight growth
@@ -236,14 +236,14 @@ Phases 8–12 go beyond V1 with constructive additions.
   - Theme: follow system / force dark / force light
   - Log viewer: max lines buffer, font size
   - Socket path override (advanced)
-  - Auto-connect companion on launch
+  - Auto-connect bridge on launch
 - [ ] Keyboard shortcuts (`Gtk.ShortcutController`)
   - `Ctrl+R` — refresh current view
   - `Ctrl+F` — focus search/filter
   - `Ctrl+S` — save profile / log export
 - [ ] Session persistence via GSettings — remember last selected extension, filter state
 - [ ] i18n scaffold (gettext / `_()`) — English only initially, structure ready for translators
-- [ ] Onboarding flow for first launch (companion not installed → step-by-step dialog)
+- [ ] Onboarding flow for first launch (bridge not installed → step-by-step dialog)
 
 ---
 
@@ -254,10 +254,10 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [ ] Icon set: SVG master + rasterised 48 / 64 / 128 px PNG
 - [ ] Flatpak manifest (`build-aux/org.gnome.GSEProfiler.json`)
   - PyGObject, GTK4, libadwaita as SDK extensions
-  - Companion extension installed outside sandbox (`--filesystem=home`)
+  - Bridge extension installed outside sandbox (`--filesystem=home`)
 - [ ] RPM spec for Fedora/RHEL
 - [ ] `release.yml` extended: build Flatpak bundle and attach to GitHub Release
-- [ ] Bridge extension cleanup on app uninstall — call `CompanionManager.uninstall()` (or a dedicated `scripts/uninstall.sh`) from the appropriate package uninstall hook: `%preun` in RPM, `cleanup` in Flatpak manifest
+- [ ] Bridge extension cleanup on app uninstall — call `BridgeManager.uninstall()` (or a dedicated `scripts/uninstall.sh`) from the appropriate package uninstall hook: `%preun` in RPM, `cleanup` in Flatpak manifest
 
 ---
 
@@ -267,7 +267,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 | ----- | ------------------ | -------------------------- |
 | 0     | Skeleton + CI      | Project setup              |
 | 1     | Extension Manager  | List, enable/disable       |
-| 2     | Companion + Socket | App ↔ Shell IPC            |
+| 2     | Bridge + Socket    | App ↔ Shell IPC            |
 | 3     | Log Viewer         | Live filtered logs         |
 | 4     | Profiler V1        | Function timing table      |
 | 5     | Inspector          | stateObj live view         |
@@ -292,7 +292,7 @@ Never block with `subprocess.run()` on the main thread.
 ### Wayland compatibility
 
 Avoid `org.gnome.Shell Eval` entirely for runtime introspection — it is restricted on Wayland
-and may be disabled in future GNOME versions. All deep operations go through the companion socket.
+and may be disabled in future GNOME versions. All deep operations go through the bridge socket.
 
 ### Profile event JSON schema (v1)
 
