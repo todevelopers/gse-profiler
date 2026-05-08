@@ -65,21 +65,29 @@ class MainWindow(Adw.ApplicationWindow):
         self.set_default_size(1100, 720)
         self._register_actions()
         self._build_ui()
+        self._update_bridge_actions()
         socket_server.connect("client-connected", self._on_client_connected)
         socket_server.connect("client-disconnected", self._on_client_disconnected)
+        dbus_client.connect("extensions-changed", self._on_extensions_changed_for_actions)
 
     def _register_actions(self) -> None:
-        install_action = Gio.SimpleAction.new("install-bridge", None)
-        install_action.connect("activate", self._on_install_bridge)
-        self.add_action(install_action)
+        self._install_action = Gio.SimpleAction.new("install-bridge", None)
+        self._install_action.connect("activate", self._on_install_bridge)
+        self.add_action(self._install_action)
 
-        reinstall_action = Gio.SimpleAction.new("reinstall-bridge", None)
-        reinstall_action.connect("activate", self._on_reinstall_bridge)
-        self.add_action(reinstall_action)
+        self._reinstall_action = Gio.SimpleAction.new("reinstall-bridge", None)
+        self._reinstall_action.connect("activate", self._on_reinstall_bridge)
+        self.add_action(self._reinstall_action)
 
-        uninstall_action = Gio.SimpleAction.new("uninstall-bridge", None)
-        uninstall_action.connect("activate", self._on_uninstall_bridge)
-        self.add_action(uninstall_action)
+        self._uninstall_action = Gio.SimpleAction.new("uninstall-bridge", None)
+        self._uninstall_action.connect("activate", self._on_uninstall_bridge)
+        self.add_action(self._uninstall_action)
+
+    def _update_bridge_actions(self) -> None:
+        installed = self._bridge.is_installed
+        self._install_action.set_enabled(not installed)
+        self._reinstall_action.set_enabled(installed)
+        self._uninstall_action.set_enabled(installed)
 
     def _build_ui(self) -> None:
         views: dict[str, Gtk.Widget] = {
@@ -174,14 +182,20 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(False)
 
+    def _on_extensions_changed_for_actions(self, _dbus: DBusClient, _extensions: dict) -> None:
+        self._update_bridge_actions()
+
     def _on_install_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
-        self._bridge.ensure_installed(parent_window=self)
+        self._bridge.install(parent_window=self)
+        GLib.idle_add(self._update_bridge_actions)
 
     def _on_reinstall_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
         self._bridge.reinstall(parent_window=self)
+        GLib.idle_add(self._update_bridge_actions)
 
     def _on_uninstall_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
         self._bridge.uninstall(parent_window=self)
+        GLib.idle_add(self._update_bridge_actions)
 
 
 class Application(Adw.Application):

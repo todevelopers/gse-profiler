@@ -27,13 +27,24 @@ class BridgeManager:
         self._source = project_root / "bridge-extension"
         self._dbus = dbus_client
 
+    @property
+    def is_installed(self) -> bool:
+        return _INSTALL_PATH.exists()
+
     def ensure_installed(self, parent_window: Gtk.Window | None = None) -> None:
-        """Prompt to install if missing; enable if already installed and known."""
+        """Auto-bootstrap: prompt user before installing if bridge is missing."""
         if not _INSTALL_PATH.exists():
             self._prompt_install(parent_window)
         elif not self._dbus.is_extension_known(BRIDGE_UUID):
-            # Files exist but gnome-shell hasn't loaded them yet (e.g. shell restart
-            # was cancelled after a previous install).
+            self._prompt_restart(parent_window)
+        else:
+            self._dbus.enable_extension(BRIDGE_UUID)
+
+    def install(self, parent_window: Gtk.Window | None = None) -> None:
+        """Manual install: no confirmation prompt, install or enable directly."""
+        if not _INSTALL_PATH.exists():
+            self._do_install(parent_window)
+        elif not self._dbus.is_extension_known(BRIDGE_UUID):
             self._prompt_restart(parent_window)
         else:
             self._dbus.enable_extension(BRIDGE_UUID)
