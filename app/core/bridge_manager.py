@@ -28,9 +28,13 @@ class BridgeManager:
         self._dbus = dbus_client
 
     def ensure_installed(self, parent_window: Gtk.Window | None = None) -> None:
-        """Install bridge if missing; enable it if already installed but disabled."""
+        """Install bridge if missing; enable it if installed and known to gnome-shell."""
         if not _INSTALL_PATH.exists():
             self._do_install(parent_window)
+        elif not self._dbus.is_extension_known(BRIDGE_UUID):
+            # Files exist but gnome-shell hasn't loaded them yet (e.g. shell restart
+            # was cancelled after a previous install).
+            self._prompt_restart(parent_window)
         else:
             self._dbus.enable_extension(BRIDGE_UUID)
 
@@ -77,25 +81,41 @@ class BridgeManager:
             bool(GLib.getenv("WAYLAND_DISPLAY"))
             or GLib.getenv("XDG_SESSION_TYPE") == "wayland"
         )
+        action = "removed" if uninstall else "installed"
+
         if wayland:
-            action = "removed" if uninstall else "installed"
-            dialog = Adw.AlertDialog.new(
-                "Shell Restart Required",
+            body = (
                 f"The bridge extension was {action}.\n\n"
                 "On Wayland, GNOME Shell requires a full logout to reload extensions.\n"
-                "Log out now?",
+                "Log out now?"
             )
-            dialog.add_response("cancel", "Cancel")
-            dialog.add_response("logout", "Log Out")
-            dialog.set_response_appearance("logout", Adw.ResponseAppearance.DESTRUCTIVE)
-            dialog.connect("response", self._on_restart_response)
-            if parent_window:
-                dialog.present(parent_window)
+            restart_label = "Log Out"
+            response_key = "restart"
+        elif uninstall:
+            # X11 uninstall: ask before restarting — auto-restart would freeze the
+            # screen without warning.
+            body = (
+                "The bridge extension was removed.\n\n"
+                "GNOME Shell must restart to fully unload it.\n"
+                "Restart now?"
+            )
+            restart_label = "Restart Shell"
+            response_key = "restart"
         else:
+            # X11 install: restart immediately, no dialog needed.
             self._restart_shell()
+            return
 
-    def _on_restart_response(self, _dialog: Adw.AlertDialog, response: str) -> None:
-        if response == "logout":
+        dialog = Adw.AlertDialog.new("Shell Restart Required", body)
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response(response_key, restart_label)
+        dialog.set_response_appearance(response_key, Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.connect("response", self._on_restart_response, response_key)
+        if parent_window:
+            dialog.present(parent_window)
+
+    def _on_restart_response(self, _dialog: Adw.AlertDialog, response: str, restart_key: str) -> None:
+        if response == restart_key:
             self._restart_shell()
 
     def _restart_shell(self) -> None:

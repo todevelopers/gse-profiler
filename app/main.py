@@ -191,26 +191,33 @@ class Application(Adw.Application):
         self._dbus_client = DBusClient()
         self._socket_server = SocketServer()
         self._bridge = BridgeManager(_PROJECT_ROOT, self._dbus_client)
+        self._win: MainWindow | None = None
+        self._bootstrap_handler: int = 0
 
     def _on_activate(self, _app: "Application") -> None:
         self._socket_server.start()
-        win = MainWindow(
+        self._win = MainWindow(
             application=self,
             dbus_client=self._dbus_client,
             socket_server=self._socket_server,
             bridge=self._bridge,
         )
-        win.present()
-        GLib.idle_add(self._bootstrap_bridge, win)
+        self._win.present()
+        # Bootstrap after proxy is ready — first extensions-changed fires once the
+        # D-Bus proxy has connected and fetched the extension list.
+        self._bootstrap_handler = self._dbus_client.connect(
+            "extensions-changed", self._on_ready_for_bootstrap
+        )
 
     def do_shutdown(self) -> None:
         self._bridge.deactivate()
         self._socket_server.stop()
         Adw.Application.do_shutdown(self)
 
-    def _bootstrap_bridge(self, win: MainWindow) -> bool:
-        self._bridge.ensure_installed(parent_window=win)
-        return False
+    def _on_ready_for_bootstrap(self, _dbus: DBusClient, _extensions: dict) -> None:
+        self._dbus_client.disconnect(self._bootstrap_handler)
+        self._bootstrap_handler = 0
+        self._bridge.ensure_installed(parent_window=self._win)
 
 
 def main() -> None:

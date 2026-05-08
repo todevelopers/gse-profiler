@@ -113,6 +113,10 @@ class DBusClient(GObject.Object):
         """Async-disable extension; refreshes list on success."""
         self._call_toggle("DisableExtension", uuid)
 
+    def is_extension_known(self, uuid: str) -> bool:
+        """Return True if gnome-shell has this extension in its registry."""
+        return uuid in self._extensions
+
     # ── Private helpers ───────────────────────────────────────────────────
 
     def _call_toggle(self, method: str, uuid: str) -> None:

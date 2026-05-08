@@ -15,6 +15,7 @@ export class SocketClient {
     #uuid;
     #onMessage;
     #connected = false;
+    #stopping = false;
     #connection = null;
     #outputStream = null;
     #reconnectSource = null;
@@ -30,11 +31,13 @@ export class SocketClient {
 
     /** Start connecting; automatically reconnects on disconnect. */
     connect() {
+        this.#stopping = false;
         this.#scheduleConnect(0);
     }
 
     /** Stop connecting / disconnect and cancel any pending reconnect. */
     disconnect() {
+        this.#stopping = true;
         this.#connected = false;
         this.#cancelReconnect();
         if (this.#connection) {
@@ -99,7 +102,8 @@ export class SocketClient {
                 const conn = obj.connect_finish(result);
                 this.#onConnected(conn);
             } catch (_e) {
-                this.#scheduleConnect(RECONNECT_DELAY_MS);
+                if (!this.#stopping)
+                    this.#scheduleConnect(RECONNECT_DELAY_MS);
             }
         });
     }
@@ -153,6 +157,7 @@ export class SocketClient {
         this.#connected = false;
         this.#connection = null;
         this.#outputStream = null;
-        this.#scheduleConnect(RECONNECT_DELAY_MS);
+        if (!this.#stopping)
+            this.#scheduleConnect(RECONNECT_DELAY_MS);
     }
 }
