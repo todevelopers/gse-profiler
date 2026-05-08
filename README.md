@@ -1,6 +1,6 @@
 # gse-profiler
 
-[![CI](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml/badge.svg)](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml)
+[![CI](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml)
 
 **GTK4 desktop application for managing, debugging, and profiling GNOME Shell extensions.**
 
