@@ -3,6 +3,6 @@
   "name": "GSE Profiler Bridge",
   "description": "Companion extension providing runtime bridge for GSE Profiler developer tools. Auto-installed by the GSE Profiler application.",
   "version": 1,
-  "shell-version": ["48"],
+  "shell-version": ["48", "49", "50"],
   "url": "https://github.com/gazovic/gse-profiler"
 }
