@@ -257,6 +257,7 @@ Phases 8–12 go beyond V1 with constructive additions.
   - Companion extension installed outside sandbox (`--filesystem=home`)
 - [ ] RPM spec for Fedora/RHEL
 - [ ] `release.yml` extended: build Flatpak bundle and attach to GitHub Release
+- [ ] Bridge extension cleanup on app uninstall — call `CompanionManager.uninstall()` (or a dedicated `scripts/uninstall.sh`) from the appropriate package uninstall hook: `%preun` in RPM, `cleanup` in Flatpak manifest
 
 ---
 
