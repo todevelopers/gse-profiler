@@ -5,7 +5,6 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
-import Gio from 'gi://Gio';
 
 // Phase 2: import SocketClient once implemented
 // import { SocketClient } from './socket_client.js';
@@ -15,7 +14,7 @@ const GSEProfilerIndicator = GObject.registerClass(
         _init() {
             super._init(0.0, 'GSE Profiler Bridge', true);
             this.add_child(new St.Icon({
-                gicon: new Gio.ThemedIcon({ name: ' user-available-symbolic' }),
+                icon_name: 'media-playback-pause-symbolic',
                 style_class: 'system-status-icon',
             }));
         }
