@@ -175,7 +175,7 @@ class Application(Adw.Application):
     def _bootstrap_companion(self, win: MainWindow) -> bool:
         mgr = CompanionManager(_PROJECT_ROOT, self._dbus_client)
         mgr.ensure_installed(parent_window=win)
-        return GLib.SOURCE_REMOVE
+        return False
 
 
 def main() -> None:
