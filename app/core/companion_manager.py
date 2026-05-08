@@ -61,7 +61,7 @@ class CompanionManager:
         if wayland:
             dialog = Adw.AlertDialog.new(
                 "Shell Restart Required",
-                "The companion extension was installed.\n\n"
+                "The bridge extension was installed.\n\n"
                 "On Wayland, GNOME Shell requires a full logout to reload extensions.\n"
                 "Log out now?",
             )

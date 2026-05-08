@@ -115,9 +115,9 @@ class MainWindow(Adw.ApplicationWindow):
         # App menu
         menu = Gio.Menu()
         section = Gio.Menu()
-        section.append("Install Companion", "win.install-companion")
-        section.append("Reinstall Companion", "win.reinstall-companion")
-        menu.append_section("Companion Extension", section)
+        section.append("Install Bridge", "win.install-companion")
+        section.append("Reinstall Bridge", "win.reinstall-companion")
+        menu.append_section("Bridge Extension", section)
 
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
