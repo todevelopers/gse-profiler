@@ -14,6 +14,7 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from app.core.companion_manager import CompanionManager
 from app.core.dbus_client import DBusClient
+from app.core.socket_server import SocketServer
 from app.ui.extension_manager import ExtensionManagerView
 from app.ui.inspector_view import InspectorView
 from app.ui.log_viewer import LogViewerView
@@ -49,13 +50,21 @@ class _ConnectionChip(Gtk.Label):
 
 
 class MainWindow(Adw.ApplicationWindow):
-    def __init__(self, dbus_client: DBusClient, **kwargs: object) -> None:
+    def __init__(
+        self,
+        dbus_client: DBusClient,
+        socket_server: SocketServer,
+        **kwargs: object,
+    ) -> None:
         super().__init__(**kwargs)
         self._dbus = dbus_client
+        self._socket = socket_server
         self.set_title("GSE Profiler")
         self.set_default_size(1100, 720)
         self._register_actions()
         self._build_ui()
+        socket_server.connect("client-connected", self._on_client_connected)
+        socket_server.connect("client-disconnected", self._on_client_disconnected)
 
     def _register_actions(self) -> None:
         install_action = Gio.SimpleAction.new("install-companion", None)
@@ -152,6 +161,12 @@ class MainWindow(Adw.ApplicationWindow):
         self._stack.set_visible_child_name(key)
         self._page_title.set_label(title)
 
+    def _on_client_connected(self, _server: SocketServer) -> None:
+        self._conn_chip.set_connected(True)
+
+    def _on_client_disconnected(self, _server: SocketServer) -> None:
+        self._conn_chip.set_connected(False)
+
     def _on_install_companion(self, _action: Gio.SimpleAction, _param: object) -> None:
         mgr = CompanionManager(_PROJECT_ROOT, self._dbus)
         mgr.ensure_installed(parent_window=self)
@@ -166,11 +181,21 @@ class Application(Adw.Application):
         super().__init__(application_id=APP_ID)
         self.connect("activate", self._on_activate)
         self._dbus_client = DBusClient()
+        self._socket_server = SocketServer()
 
     def _on_activate(self, _app: "Application") -> None:
-        win = MainWindow(application=self, dbus_client=self._dbus_client)
+        self._socket_server.start()
+        win = MainWindow(
+            application=self,
+            dbus_client=self._dbus_client,
+            socket_server=self._socket_server,
+        )
         win.present()
         GLib.idle_add(self._bootstrap_companion, win)
+
+    def do_shutdown(self) -> None:
+        self._socket_server.stop()
+        Adw.Application.do_shutdown(self)
 
     def _bootstrap_companion(self, win: MainWindow) -> bool:
         mgr = CompanionManager(_PROJECT_ROOT, self._dbus_client)

@@ -59,27 +59,27 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 2: Companion Extension + Unix Socket Transport
+## Phase 2: Companion Extension + Unix Socket Transport ✅
 
 **Goal:** App and companion can exchange messages reliably.
 
 ### Companion extension
 
-- [ ] `extension.js` — `enable()` / `disable()` lifecycle
-- [ ] `socket_client.js` — connect to `$XDG_RUNTIME_DIR/gse-profiler.sock`, reconnect loop
-- [ ] Handshake message `{ type: "hello", version: "1", uuid: COMPANION_UUID }`
-- [ ] GNOME panel indicator (simple icon from `Gio.ThemedIcon`, no menu in V1)
+- [x] `extension.js` — `enable()` / `disable()` lifecycle
+- [x] `socket_client.js` — connect to `$XDG_RUNTIME_DIR/gse-profiler.sock`, reconnect loop
+- [x] Handshake message `{ type: "hello", version: "1", uuid: COMPANION_UUID }`
+- [x] GNOME panel indicator (simple icon from `Gio.ThemedIcon`, no menu in V1)
 
 ### App side
 
-- [ ] `app/core/socket_server.py` — async Unix socket server, `GLib.IOChannel`
-- [ ] Message router — dispatch incoming JSON messages to the right subsystem
-- [ ] Auto-install logic:
+- [x] `app/core/socket_server.py` — async Unix socket server, `Gio.SocketService`
+- [x] Message router — dispatch incoming JSON messages to the right subsystem
+- [x] Auto-install logic:
   - Copy `companion-extension/` to install path
   - Run `scripts/restart-shell.sh` in a subprocess
-- [ ] Connection status indicator in app header bar (connected / disconnected chip)
-- [ ] "Install / Reinstall companion" action in app menu
-- [ ] Reinstall prompts shell restart
+- [x] Connection status indicator in app header bar (connected / disconnected chip)
+- [x] "Install / Reinstall companion" action in app menu
+- [x] Reinstall prompts shell restart
 
 ---
 
