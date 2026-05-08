@@ -53,8 +53,9 @@ export class SocketClient {
      * @param {object} message
      */
     send(message) {
-        if (!this.#connected || !this.#outputStream)
+        if (!this.#connected || !this.#outputStream) {
             return;
+        }
         try {
             const line = `${JSON.stringify(message)}\n`;
             const bytes = new TextEncoder().encode(line);
@@ -137,8 +138,9 @@ export class SocketClient {
             if (trimmed) {
                 try {
                     const msg = JSON.parse(trimmed);
-                    if (this.#onMessage)
+                    if (this.#onMessage) {
                         this.#onMessage(msg);
+                    }
                 } catch (_e) {
                     log(`[gse-profiler-bridge] invalid JSON from app: ${trimmed}`);
                 }
