@@ -87,19 +87,17 @@ class DBusClient(GObject.Object):
         if signal_name != "ExtensionStateChanged":
             return
         # Signature is (sa{sv}) — uuid + full state-info dict, not (s, u).
-        # Wrap in try/finally so extensions-changed always fires even if
-        # parsing fails — otherwise the UI stays frozen in whatever state it was.
-        try:
-            uuid, info = parameters.unpack()
-            new_state = int(info.get("state", ExtensionState.UNINSTALLED))
-            if new_state == ExtensionState.UNINSTALLED:
-                self._extensions.pop(uuid, None)
-            else:
-                self._extensions[uuid] = _parse_info(uuid, info)
-        except Exception as exc:
-            _log.error("ExtensionStateChanged parse error: %s", exc)
-        finally:
-            self.emit("extensions-changed", dict(self._extensions))
+        uuid, info = parameters.unpack()
+        new_state = int(info.get("state", ExtensionState.UNINSTALLED))
+        _log.debug(
+            "ExtensionStateChanged: uuid=%s state=%s raw_type=%s",
+            uuid, new_state, type(info).__name__,
+        )
+        if new_state == ExtensionState.UNINSTALLED:
+            self._extensions.pop(uuid, None)
+        else:
+            self._extensions[uuid] = _parse_info(uuid, info)
+        self.emit("extensions-changed", dict(self._extensions))
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -154,6 +152,7 @@ class DBusClient(GObject.Object):
         uuid: str,
         on_done: Callable[[GLib.Error | None], None] | None = None,
     ) -> None:
+        _log.debug("D-Bus call: %s(%s)", method, uuid)
         if self._proxy is None:
             if on_done:
                 on_done(GLib.Error("D-Bus proxy not ready"))
@@ -182,6 +181,7 @@ class DBusClient(GObject.Object):
             error = exc
             _log.error("Toggle %s failed: %s", uuid, exc)
             self.emit("operation-error", uuid, str(exc))
+        _log.debug("Toggle done: uuid=%s error=%s", uuid, error)
         if on_done is not None:
             on_done(error)
         # Only force-refresh the list on error. On success, the ExtensionStateChanged

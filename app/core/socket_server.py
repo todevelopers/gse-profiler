@@ -125,7 +125,9 @@ class SocketServer(GObject.Object):
         try:
             line_bytes, _length = stream.read_line_finish(result)
         except GLib.Error as exc:
-            if not exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.CANCELLED):
+            if exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.CANCELLED):
+                _log.debug("Socket read cancelled")
+            else:
                 _log.info("Bridge read error: %s", exc)
             self._output = None
             self.emit("client-disconnected")
