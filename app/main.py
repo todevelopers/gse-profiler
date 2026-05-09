@@ -181,6 +181,12 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(False)
+        # Bridge socket closed. The DISABLED D-Bus signal travels via dbus-daemon
+        # and can arrive after the local socket-close I/O event, leaving the switch
+        # stuck in the insensitive DISABLING state. A short delay lets any in-flight
+        # ExtensionStateChanged signals settle first; then list_extensions syncs
+        # the UI to whatever GNOME Shell actually reports.
+        GLib.timeout_add(600, self._dbus.list_extensions)
 
     def _on_extensions_changed_for_actions(self, _dbus: DBusClient, _extensions: dict) -> None:
         self._update_bridge_actions()

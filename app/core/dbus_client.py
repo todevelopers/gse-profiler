@@ -87,16 +87,19 @@ class DBusClient(GObject.Object):
         if signal_name != "ExtensionStateChanged":
             return
         # Signature is (sa{sv}) — uuid + full state-info dict, not (s, u).
-        # Treating the dict as an int raised TypeError and aborted the handler
-        # before extensions-changed was emitted, so the UI never saw the
-        # Disabling → Disabled transition (the bridge toggle appeared frozen).
-        uuid, info = parameters.unpack()
-        new_state = int(info.get("state", ExtensionState.UNINSTALLED))
-        if new_state == ExtensionState.UNINSTALLED:
-            self._extensions.pop(uuid, None)
-        else:
-            self._extensions[uuid] = _parse_info(uuid, info)
-        self.emit("extensions-changed", dict(self._extensions))
+        # Wrap in try/finally so extensions-changed always fires even if
+        # parsing fails — otherwise the UI stays frozen in whatever state it was.
+        try:
+            uuid, info = parameters.unpack()
+            new_state = int(info.get("state", ExtensionState.UNINSTALLED))
+            if new_state == ExtensionState.UNINSTALLED:
+                self._extensions.pop(uuid, None)
+            else:
+                self._extensions[uuid] = _parse_info(uuid, info)
+        except Exception as exc:
+            _log.error("ExtensionStateChanged parse error: %s", exc)
+        finally:
+            self.emit("extensions-changed", dict(self._extensions))
 
     # ── Public API ────────────────────────────────────────────────────────
 
