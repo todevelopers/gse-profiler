@@ -64,4 +64,4 @@ success "Desktop entry installed — GSE Profiler is now in the app launcher."
 
 # ── Launch ─────────────────────────────────────────────────────────────────────
 info "Starting GSE Profiler in debug mode…"
-exec python3 --debug "$INSTALL_DIR/app/main.py"
+exec python3 "$INSTALL_DIR/app/main.py" --debug

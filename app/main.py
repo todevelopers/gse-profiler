@@ -243,7 +243,8 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
     app = Application()
-    app.run(sys.argv)
+    argv = [a for a in sys.argv if a != "--debug"]
+    app.run(argv)
 
 
 if __name__ == "__main__":
