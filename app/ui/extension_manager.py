@@ -42,6 +42,7 @@ class ExtensionManagerView(Gtk.Box):
         self._dbus = dbus_client
         self._rows: dict[str, Adw.ActionRow] = {}
         self._row_extras: dict[str, tuple[Gtk.Label, Gtk.Switch]] = {}
+        self._pending_disables: set[str] = set()
         self._build_ui()
         dbus_client.connect("extensions-changed", self._on_extensions_changed)
         dbus_client.connect("operation-error", self._on_operation_error)
@@ -83,6 +84,7 @@ class ExtensionManagerView(Gtk.Box):
                 self._group.remove(row)
             self._rows.clear()
             self._row_extras.clear()
+            self._pending_disables.clear()
 
             if not extensions:
                 self._empty_row.set_visible(True)
@@ -147,8 +149,18 @@ class ExtensionManagerView(Gtk.Box):
             badge.add_css_class(css)
         badge.set_tooltip_text(info.get("error", "") if state == ExtensionState.ERROR else "")
 
+        # GNOME 48 fires a spurious state=1 (ENABLED) immediately after
+        # DisableExtension. Clear the pending-disable flag when DISABLING (7)
+        # arrives — that's when the spurious window ends.
+        if state == ExtensionState.DISABLING:
+            self._pending_disables.discard(uuid)
+        elif state == ExtensionState.DISABLED:
+            self._pending_disables.discard(uuid)
+
         prev_active = switch.get_active()
         new_active = state == ExtensionState.ENABLED
+        if new_active and uuid in self._pending_disables:
+            new_active = False
         new_sensitive = state not in _TRANSIENT_STATES
         _log.debug(
             "_refresh_row: uuid=%s state=%s switch active %s→%s sensitive=%s",
@@ -163,8 +175,10 @@ class ExtensionManagerView(Gtk.Box):
         active = switch.get_active()
         _log.debug("_on_switch_toggled: uuid=%s active=%s", uuid, active)
         if active:
+            self._pending_disables.discard(uuid)
             self._dbus.enable_extension(uuid)
         else:
+            self._pending_disables.add(uuid)
             self._dbus.disable_extension(uuid)
 
 
