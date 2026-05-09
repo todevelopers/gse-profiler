@@ -6,6 +6,7 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import { SocketClient } from './socket_client.js';
+import { Profiler } from './profiler.js';
 
 const COMPANION_UUID = 'gse-profiler-bridge@todevelopers';
 
@@ -28,11 +29,18 @@ export default class GSEProfilerBridge extends Extension {
     /** @type {SocketClient | null} */
     _socketClient = null;
 
+    /** @type {Profiler | null} */
+    _profiler = null;
+
     enable() {
         log('[gse-profiler-bridge] Enabled');
 
         this._indicator = new GSEProfilerIndicator();
         Main.panel.addToStatusArea('gse-profiler-bridge', this._indicator);
+
+        this._profiler = new Profiler(event => {
+            this._socketClient?.send(event);
+        });
 
         this._socketClient = new SocketClient(COMPANION_UUID, msg => this._onMessage(msg));
         this._socketClient.connect();
@@ -40,6 +48,11 @@ export default class GSEProfilerBridge extends Extension {
 
     disable() {
         log('[gse-profiler-bridge] Disabled');
+
+        if (this._profiler) {
+            this._profiler.stopProfiling();
+            this._profiler = null;
+        }
 
         if (this._socketClient) {
             this._socketClient.disconnect();
@@ -55,5 +68,16 @@ export default class GSEProfilerBridge extends Extension {
     /** @param {object} msg */
     _onMessage(msg) {
         log(`[gse-profiler-bridge] message received: type=${msg.type}`);
+        switch (msg.type) {
+        case 'start_profiling': {
+            const ok = this._profiler?.startProfiling(msg.uuid) ?? false;
+            this._socketClient?.send({ type: 'profiling_started', uuid: msg.uuid, ok });
+            break;
+        }
+        case 'stop_profiling':
+            this._profiler?.stopProfiling();
+            this._socketClient?.send({ type: 'profiling_stopped' });
+            break;
+        }
     }
 }

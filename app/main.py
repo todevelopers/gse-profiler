@@ -94,7 +94,7 @@ class MainWindow(Adw.ApplicationWindow):
         views: dict[str, Gtk.Widget] = {
             "extensions": ExtensionManagerView(self._dbus),
             "logs": LogViewerView(self._dbus),
-            "profiler": ProfilerView(),
+            "profiler": ProfilerView(self._dbus, self._socket),
             "inspector": InspectorView(),
         }
 

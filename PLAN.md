@@ -102,13 +102,13 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 4: Profiler V1
+## Phase 4: Profiler V1 ✅
 
 **Goal:** Live function timing for a selected extension.
 
 ### Bridge side
 
-- [ ] `bridge-extension/profiler.js`
+- [x] `bridge-extension/profiler.js`
   - `startProfiling(uuid)` — monkey-patch all functions on extension's exported object
   - Record: function name, call depth, start timestamp (µs), end timestamp
   - Emit events via socket: `{ type: "profile_event", extensionUuid, function, start, end, depth }`
@@ -116,13 +116,13 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ### App side
 
-- [ ] Profiler UI
+- [x] Profiler UI
   - Start / stop profiling controls (select target extension from dropdown)
   - Call table (`GtkColumnView`): function name, call count, total ms, avg ms, max ms — sortable
   - Timeline view (simple horizontal bar chart per function, sorted by start time)
-- [ ] Save profile to JSON file (`Gio.File`)
-- [ ] Load profile from JSON file + same visualization
-- [ ] Clear / reset profiling data
+- [x] Save profile to JSON file (`Gio.File`)
+- [x] Load profile from JSON file + same visualization
+- [x] Clear / reset profiling data
 
 ---
 
