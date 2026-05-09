@@ -13,8 +13,8 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from app.core.bridge_manager import BridgeManager
-from app.core.dbus_client import DBusClient
+from app.core.bridge_manager import BRIDGE_UUID, BridgeManager
+from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
 from app.ui.extension_manager import ExtensionManagerView
 from app.ui.inspector_view import InspectorView
@@ -223,11 +223,17 @@ class Application(Adw.Application):
         self._bootstrap_handler = self._dbus_client.connect(
             "extensions-changed", self._on_ready_for_bootstrap
         )
+        self._dbus_client.connect("extensions-changed", self._on_bridge_state_changed)
 
     def do_shutdown(self) -> None:
         self._bridge.deactivate()
         self._socket_server.stop()
         Adw.Application.do_shutdown(self)
+
+    def _on_bridge_state_changed(self, _dbus: DBusClient, extensions: dict) -> None:
+        bridge = extensions.get(BRIDGE_UUID)
+        if bridge and bridge["state"] == ExtensionState.DISABLED:
+            self._socket_server.disconnect_client()
 
     def _on_ready_for_bootstrap(self, _dbus: DBusClient, _extensions: dict) -> None:
         self._dbus_client.disconnect(self._bootstrap_handler)

@@ -67,6 +67,11 @@ class SocketServer(GObject.Object):
         self._service.start()
         _log.info("Socket server listening at %s", sock_path)
 
+    def disconnect_client(self) -> None:
+        """Proactively cancel the pending read; _on_line_read handles cleanup."""
+        if self._cancellable:
+            self._cancellable.cancel()
+
     def stop(self) -> None:
         """Stop the server and close all connections."""
         if self._cancellable:
