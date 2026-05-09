@@ -459,7 +459,7 @@ class ProfilerView(Gtk.Box):
 
     def _flush_refresh_cb(self) -> bool:
         self._flush_refresh()
-        return GLib.SOURCE_REMOVE
+        return bool(GLib.SOURCE_REMOVE)
 
     def _flush_refresh(self) -> None:
         self._refresh_pending = False
@@ -473,5 +473,5 @@ class ProfilerView(Gtk.Box):
     def _selected_uuid(self) -> str | None:
         idx = self._ext_dropdown.get_selected()
         if 0 <= idx < len(self._ext_uuids):
-            return self._ext_uuids[idx]
+            return str(self._ext_uuids[idx])
         return None
