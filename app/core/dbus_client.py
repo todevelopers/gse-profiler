@@ -117,7 +117,7 @@ class DBusClient(GObject.Object):
     def enable_extension(
         self, uuid: str, on_done: Callable[[GLib.Error | None], None] | None = None
     ) -> None:
-        """Async-enable extension; refreshes list on success.
+        """Async-enable extension.
 
         If `on_done` is provided, it is invoked when the call completes, with
         the GLib.Error on failure or None on success.
@@ -127,7 +127,7 @@ class DBusClient(GObject.Object):
     def disable_extension(
         self, uuid: str, on_done: Callable[[GLib.Error | None], None] | None = None
     ) -> None:
-        """Async-disable extension; refreshes list on success.
+        """Async-disable extension.
 
         If `on_done` is provided, it is invoked when the call completes, with
         the GLib.Error on failure or None on success.
@@ -181,7 +181,13 @@ class DBusClient(GObject.Object):
             self.emit("operation-error", uuid, str(exc))
         if on_done is not None:
             on_done(error)
-        GLib.idle_add(self.list_extensions)
+        # Only force-refresh the list on error. On success, the ExtensionStateChanged
+        # D-Bus signal drives state updates via _on_dbus_signal. Calling list_extensions
+        # unconditionally races with that signal: if the ListExtensions reply arrives
+        # before ExtensionStateChanged, it overwrites the correct state with stale data,
+        # leaving the switch permanently showing the wrong state.
+        if error is not None:
+            GLib.idle_add(self.list_extensions)
 
     def _on_list_done(
         self,
