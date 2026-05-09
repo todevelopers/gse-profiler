@@ -131,10 +131,12 @@ class SocketServer(GObject.Object):
 
     def _on_line_read(
         self,
-        stream: Gio.DataInputStream,
+        stream: Gio.DataInputStream | None,
         result: Gio.AsyncResult,
         _user_data: object,
     ) -> None:
+        if stream is None:
+            return
         if stream is not self._istream:
             _log.debug("Discarding read from superseded connection")
             try:
