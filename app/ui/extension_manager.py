@@ -147,13 +147,22 @@ class ExtensionManagerView(Gtk.Box):
             badge.add_css_class(css)
         badge.set_tooltip_text(info.get("error", "") if state == ExtensionState.ERROR else "")
 
+        prev_active = switch.get_active()
+        new_active = state == ExtensionState.ENABLED
+        new_sensitive = state not in _TRANSIENT_STATES
+        _log.debug(
+            "_refresh_row: uuid=%s state=%s switch active %s→%s sensitive=%s",
+            uuid, state, prev_active, new_active, new_sensitive,
+        )
         switch.handler_block_by_func(self._on_switch_toggled)
-        switch.set_active(state == ExtensionState.ENABLED)
-        switch.set_sensitive(state not in _TRANSIENT_STATES)
+        switch.set_active(new_active)
+        switch.set_sensitive(new_sensitive)
         switch.handler_unblock_by_func(self._on_switch_toggled)
 
     def _on_switch_toggled(self, switch: Gtk.Switch, _pspec: object, uuid: str) -> None:
-        if switch.get_active():
+        active = switch.get_active()
+        _log.debug("_on_switch_toggled: uuid=%s active=%s", uuid, active)
+        if active:
             self._dbus.enable_extension(uuid)
         else:
             self._dbus.disable_extension(uuid)

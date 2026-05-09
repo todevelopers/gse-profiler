@@ -37,7 +37,7 @@ class BridgeManager:
             self._prompt_install(parent_window)
         elif not self._dbus.is_extension_known(BRIDGE_UUID):
             self._prompt_restart(parent_window)
-        else:
+        elif self._dbus.get_extension_state(BRIDGE_UUID) != ExtensionState.ENABLED:
             self._dbus.enable_extension(BRIDGE_UUID)
 
     def install(self, parent_window: Gtk.Window | None = None) -> None:

@@ -38,6 +38,7 @@ class SocketServer(GObject.Object):
         self._service: Gio.SocketService | None = None
         self._output: Gio.DataOutputStream | None = None
         self._cancellable: Gio.Cancellable | None = None
+        self._istream: Gio.DataInputStream | None = None
 
     @property
     def is_client_connected(self) -> bool:
@@ -76,6 +77,7 @@ class SocketServer(GObject.Object):
             self._service.close()
             self._service = None
         self._output = None
+        self._istream = None
         _unlink_socket(_socket_path())
 
     def send(self, message: dict[str, Any]) -> None:
@@ -98,11 +100,15 @@ class SocketServer(GObject.Object):
         _source: object,
     ) -> bool:
         _log.info("Bridge connected")
+        if self._cancellable:
+            _log.debug("Cancelling previous connection before accepting new one")
+            self._cancellable.cancel()
         self._cancellable = Gio.Cancellable.new()
         self._output = Gio.DataOutputStream.new(connection.get_output_stream())
 
         istream = Gio.DataInputStream.new(connection.get_input_stream())
         istream.set_newline_type(Gio.DataStreamNewlineType.LF)
+        self._istream = istream
         self._read_next(istream)
 
         self.emit("client-connected")
@@ -122,6 +128,14 @@ class SocketServer(GObject.Object):
         result: Gio.AsyncResult,
         _user_data: object,
     ) -> None:
+        if stream is not self._istream:
+            _log.debug("Discarding read from superseded connection")
+            try:
+                stream.read_line_finish(result)
+            except GLib.Error:
+                pass
+            return
+
         try:
             line_bytes, _length = stream.read_line_finish(result)
         except GLib.Error as exc:
@@ -130,12 +144,14 @@ class SocketServer(GObject.Object):
             else:
                 _log.info("Bridge read error: %s", exc)
             self._output = None
+            self._istream = None
             self.emit("client-disconnected")
             return
 
         if line_bytes is None:
             _log.info("Bridge disconnected (EOF)")
             self._output = None
+            self._istream = None
             self.emit("client-disconnected")
             return
 
