@@ -3,6 +3,9 @@
 import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+// Base classes whose methods we never patch (framework internals).
+const _STOP_CLASSES = new Set(['Extension', 'Object']);
+
 /**
  * Extension function profiler — monkey-patches a target extension's exported
  * object and records per-call timing events.
@@ -28,7 +31,8 @@ export class Profiler {
     }
 
     /**
-     * Monkey-patch all functions on the extension's stateObj (instance + prototype).
+     * Monkey-patch all functions on the extension's stateObj.
+     * Walks the full prototype chain (excluding framework base classes).
      * @param {string} uuid
      * @returns {boolean} whether patching succeeded
      */
@@ -47,19 +51,27 @@ export class Profiler {
         this.#callDepth = 0;
 
         const target = ext.stateObj;
-        log(`[gse-profiler-bridge] stateObj type=${typeof target} keys=${Object.getOwnPropertyNames(target).join(',')}`);
+        const ownKeys = Object.getOwnPropertyNames(target);
+        log(`[gse-profiler-bridge] stateObj constructor=${target?.constructor?.name} ownKeys=[${ownKeys.join(',')}]`);
 
-        // Patch own properties first (instance wins over prototype).
-        this.#patchObject(target, target);
-        // Then patch prototype chain (one level deep).
-        const proto = Object.getPrototypeOf(target);
-        log(`[gse-profiler-bridge] proto=${proto?.constructor?.name ?? 'none'}`);
-        if (proto && proto !== Object.prototype) {
+        // Walk the full prototype chain, stopping at known framework base classes.
+        let proto = target;
+        while (proto) {
+            const ctorName = proto.constructor?.name ?? '';
+            if (_STOP_CLASSES.has(ctorName)) {
+                break;
+            }
+            log(`[gse-profiler-bridge] patching proto level: ${ctorName} keys=[${Object.getOwnPropertyNames(proto).join(',')}]`);
             this.#patchObject(target, proto);
+            proto = Object.getPrototypeOf(proto);
         }
 
         this.#running = true;
-        log(`[gse-profiler-bridge] profiling started: ${uuid} (${this.#patches.size} functions patched: ${[...this.#patches.keys()].join(',')})`);
+        if (this.#patches.size === 0) {
+            log(`[gse-profiler-bridge] WARNING: 0 functions patched for ${uuid} — extension may use closures or GObject vfuncs`);
+        } else {
+            log(`[gse-profiler-bridge] profiling started: ${uuid} (${this.#patches.size} patched: [${[...this.#patches.keys()].join(',')}])`);
+        }
         return true;
     }
 
@@ -86,14 +98,15 @@ export class Profiler {
 
     /**
      * Enumerate own function-valued properties of `source` and install
-     * timing wrappers on `holder`.
+     * timing wrappers on `holder` (the stateObj instance).
+     * Instance properties take precedence — already-patched names are skipped.
      * @param {object} holder - object to write the patched functions onto
      * @param {object} source - object whose properties are enumerated
      */
     #patchObject(holder, source) {
         for (const name of Object.getOwnPropertyNames(source)) {
             if (name === 'constructor') { continue; }
-            if (this.#patches.has(name)) { continue; } // instance already patched this name
+            if (this.#patches.has(name)) { continue; }
 
             let desc;
             try {
@@ -106,16 +119,14 @@ export class Profiler {
             const original = desc.value;
             this.#patches.set(name, { holder, name, original });
 
-            // Closure over `profiler` and `funcName` to record each call.
             const profiler = this;
             const funcName = name;
             holder[name] = function profiled(...args) {
                 if (!profiler.#running) {
                     return original.apply(this, args);
                 }
-
                 const depth = profiler.#callDepth++;
-                // GLib.get_monotonic_time() returns µs as an integer — convert to seconds.
+                // GLib.get_monotonic_time() returns µs — convert to seconds.
                 const start = GLib.get_monotonic_time() / 1e6;
                 try {
                     return original.apply(this, args);

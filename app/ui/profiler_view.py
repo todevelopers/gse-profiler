@@ -12,6 +12,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject, Gtk
 
 from app.core.dbus_client import DBusClient
+from app.core.journal_reader import JournalReader, LogEntry
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
@@ -68,6 +69,8 @@ class ProfilerView(Gtk.Box):
         self._ext_uuids: list[str] = []
 
         self._store = Gio.ListStore(item_type=FunctionStat)
+        self._journal = JournalReader()
+        self._journal.connect("log-entry", self._on_bridge_log)
         self._build_ui()
 
         socket_server.connect("message-received", self._on_message)
@@ -178,9 +181,35 @@ class ProfilerView(Gtk.Box):
         paned.set_position(300)
         paned.set_vexpand(True)
 
+        # ── Bridge log panel ───────────────────────────────────────────────
+        self._bridge_log_view = Gtk.TextView()
+        self._bridge_log_view.set_editable(False)
+        self._bridge_log_view.set_cursor_visible(False)
+        self._bridge_log_view.set_monospace(True)
+        self._bridge_log_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+
+        bridge_log_scroll = Gtk.ScrolledWindow()
+        bridge_log_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        bridge_log_scroll.set_min_content_height(80)
+        bridge_log_scroll.set_max_content_height(160)
+        bridge_log_scroll.set_child(self._bridge_log_view)
+
+        bridge_log_label = Gtk.Label(label="Bridge logs")
+        bridge_log_label.set_xalign(0.0)
+        bridge_log_label.set_margin_start(6)
+        bridge_log_label.set_margin_top(4)
+        bridge_log_label.add_css_class("caption-heading")
+        bridge_log_label.add_css_class("dim-label")
+
+        bridge_log_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        bridge_log_box.append(bridge_log_label)
+        bridge_log_box.append(bridge_log_scroll)
+
         self.append(toolbar)
         self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         self.append(paned)
+        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        self.append(bridge_log_box)
 
     # ── Column helpers ─────────────────────────────────────────────────────
 
@@ -331,6 +360,8 @@ class ProfilerView(Gtk.Box):
         if not uuid:
             _log.warning("Start clicked but no extension selected (ext_uuids=%r)", self._ext_uuids)
             return
+        self._clear_bridge_log()
+        self._journal.start()
         self._socket.send({"type": "start_profiling", "uuid": uuid})
         self._profiling = True
         self._start_btn.set_sensitive(False)
@@ -344,6 +375,7 @@ class ProfilerView(Gtk.Box):
 
     def _set_stopped(self) -> None:
         self._profiling = False
+        self._journal.stop()
         self._start_btn.set_sensitive(True)
         self._stop_btn.set_sensitive(False)
         self._ext_dropdown.set_sensitive(True)
@@ -419,15 +451,36 @@ class ProfilerView(Gtk.Box):
         self._flush_refresh()
 
     def _on_message(self, _server: SocketServer, msg: dict[str, Any]) -> None:
-        _log.debug("message received from bridge: type=%s", msg.get("type"))
-        if msg.get("type") == "profile_event":
+        msg_type = msg.get("type")
+        if msg_type == "profile_event":
+            _log.debug("profile_event: fn=%s dur=%.3fms", msg.get("function"), (msg.get("end", 0) - msg.get("start", 0)) * 1000)
             self._ingest_event(msg)
-        elif msg.get("type") == "profiling_stopped":
+        elif msg_type == "profiling_started":
+            _log.info("profiling_started: uuid=%s ok=%s", msg.get("uuid"), msg.get("ok"))
+            if not msg.get("ok"):
+                _log.warning("Bridge could not find stateObj for %s — no functions patched", msg.get("uuid"))
+        elif msg_type == "profiling_stopped":
+            _log.debug("profiling_stopped received")
             self._set_stopped()
+        else:
+            _log.debug("message received from bridge: type=%s", msg_type)
 
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         if self._profiling:
             self._set_stopped()
+
+    def _on_bridge_log(self, _reader: JournalReader, entry: LogEntry) -> None:
+        if "gse-profiler-bridge" not in entry.message:
+            return
+        buf = self._bridge_log_view.get_buffer()
+        end = buf.get_end_iter()
+        buf.insert(end, f"{entry.timestamp.strftime('%H:%M:%S')} {entry.message}\n")
+        # Auto-scroll bridge log to bottom.
+        vadj = self._bridge_log_view.get_parent().get_vadjustment()  # type: ignore[union-attr]
+        vadj.set_value(vadj.get_upper())
+
+    def _clear_bridge_log(self) -> None:
+        self._bridge_log_view.get_buffer().set_text("")
 
     def _on_extensions_changed(
         self, _dbus: DBusClient, extensions: dict[str, Any]
