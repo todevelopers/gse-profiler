@@ -36,6 +36,7 @@ class SocketServer(GObject.Object):
     def __init__(self) -> None:
         super().__init__()
         self._service: Gio.SocketService | None = None
+        self._connection: Gio.SocketConnection | None = None  # keeps streams alive
         self._output: Gio.DataOutputStream | None = None
         self._cancellable: Gio.Cancellable | None = None
         self._istream: Gio.DataInputStream | None = None
@@ -81,6 +82,7 @@ class SocketServer(GObject.Object):
             self._service.stop()
             self._service.close()
             self._service = None
+        self._connection = None
         self._output = None
         self._istream = None
         _unlink_socket(_socket_path())
@@ -111,6 +113,7 @@ class SocketServer(GObject.Object):
             self._cancellable.cancel()
 
         self._cancellable = Gio.Cancellable.new()
+        self._connection = connection  # prevent GC from closing the underlying streams
         self._output = Gio.DataOutputStream.new(connection.get_output_stream())
 
         istream = Gio.DataInputStream.new(connection.get_input_stream())
@@ -157,6 +160,7 @@ class SocketServer(GObject.Object):
                 _log.debug("Socket read cancelled")
             else:
                 _log.info("Bridge read error: %s", exc)
+            self._connection = None
             self._output = None
             self._istream = None
             self.emit("client-disconnected")
@@ -164,6 +168,7 @@ class SocketServer(GObject.Object):
 
         if line_bytes is None:
             _log.info("Bridge disconnected (EOF)")
+            self._connection = None
             self._output = None
             self._istream = None
             self.emit("client-disconnected")
