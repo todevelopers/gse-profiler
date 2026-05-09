@@ -19,6 +19,7 @@ export class SocketClient {
     #connection = null;
     #outputStream = null;
     #reconnectSource = null;
+    #cancellable = null;
 
     /**
      * @param {string} uuid - bridge extension UUID for the handshake
@@ -36,13 +37,20 @@ export class SocketClient {
     }
 
     /** Stop connecting / disconnect and cancel any pending reconnect.
-     *  Close runs asynchronously so the caller (extension `disable()`)
-     *  never blocks gnome-shell's main loop on socket teardown.
+     *  Cancels the in-flight read_line_async first so close_async can
+     *  complete immediately and the Python side receives EOF promptly.
      */
     disconnect() {
         this.#stopping = true;
         this.#connected = false;
         this.#cancelReconnect();
+
+        // Cancel pending read so close_async is not blocked waiting for it.
+        if (this.#cancellable) {
+            this.#cancellable.cancel();
+            this.#cancellable = null;
+        }
+
         const conn = this.#connection;
         this.#connection = null;
         this.#outputStream = null;
@@ -122,6 +130,7 @@ export class SocketClient {
     #onConnected(connection) {
         this.#connection = connection;
         this.#connected = true;
+        this.#cancellable = Gio.Cancellable.new();
 
         this.#outputStream = new Gio.DataOutputStream({
             base_stream: connection.get_output_stream(),
@@ -137,12 +146,15 @@ export class SocketClient {
     }
 
     #readNextLine(stream) {
-        stream.read_line_async(GLib.PRIORITY_DEFAULT, null, (obj, result) => {
+        stream.read_line_async(GLib.PRIORITY_DEFAULT, this.#cancellable, (obj, result) => {
             let line;
             try {
                 [line] = obj.read_line_finish_utf8(result);
             } catch (_e) {
-                this.#onDisconnected();
+                // Cancelled means disconnect() was called — no reconnect needed.
+                if (!this.#stopping) {
+                    this.#onDisconnected();
+                }
                 return;
             }
             if (line === null) {
@@ -168,6 +180,7 @@ export class SocketClient {
         this.#connected = false;
         this.#connection = null;
         this.#outputStream = null;
+        this.#cancellable = null;
         if (!this.#stopping) {
             this.#scheduleConnect(RECONNECT_DELAY_MS);
         }

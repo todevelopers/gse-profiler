@@ -100,9 +100,11 @@ class SocketServer(GObject.Object):
         _source: object,
     ) -> bool:
         _log.info("Bridge connected")
+        was_connected = self._output is not None
         if self._cancellable:
             _log.debug("Cancelling previous connection before accepting new one")
             self._cancellable.cancel()
+
         self._cancellable = Gio.Cancellable.new()
         self._output = Gio.DataOutputStream.new(connection.get_output_stream())
 
@@ -110,6 +112,11 @@ class SocketServer(GObject.Object):
         istream.set_newline_type(Gio.DataStreamNewlineType.LF)
         self._istream = istream
         self._read_next(istream)
+
+        if was_connected:
+            # Previous connection was replaced without a clean EOF — notify listeners.
+            _log.info("Previous bridge connection replaced without clean disconnect")
+            self.emit("client-disconnected")
 
         self.emit("client-connected")
         return True
