@@ -93,7 +93,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _build_ui(self) -> None:
         views: dict[str, Gtk.Widget] = {
             "extensions": ExtensionManagerView(self._dbus),
-            "logs": LogViewerView(),
+            "logs": LogViewerView(self._dbus),
             "profiler": ProfilerView(),
             "inspector": InspectorView(),
         }

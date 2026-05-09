@@ -83,22 +83,22 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 3: Log Viewer
+## Phase 3: Log Viewer ✅
 
 **Goal:** Live, filterable log stream from journalctl.
 
-- [ ] `app/core/journal_reader.py`
+- [x] `app/core/journal_reader.py`
   - Spawn `journalctl --follow -o json` subprocess
   - Parse JSON lines: `SYSLOG_IDENTIFIER`, `MESSAGE`, `PRIORITY`, `__REALTIME_TIMESTAMP`
   - Emit GObject signal per parsed entry
-- [ ] Log Viewer UI
-  - `GtkColumnView` or `GtkTextView` with monospace font
+- [x] Log Viewer UI
+  - `GtkTextView` with monospace font
   - Auto-scroll to bottom (toggle button to lock/unlock)
-- [ ] Filter bar
+- [x] Filter bar
   - UUID dropdown (populated from Extension Manager)
   - Log level filter (DEBUG / INFO / WARNING / ERROR / CRITICAL)
   - Full-text search with match highlighting
-- [ ] Toolbar actions: copy selected lines, export visible log to `.txt` file, clear
+- [x] Toolbar actions: copy selected lines, export visible log to `.txt` file, clear
 
 ---
 
