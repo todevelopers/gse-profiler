@@ -322,7 +322,14 @@ class ProfilerView(Gtk.Box):
 
     def _on_start(self, _btn: Gtk.Button) -> None:
         uuid = self._selected_uuid()
+        _log.debug(
+            "Start clicked — uuid=%r connected=%s ext_count=%d",
+            uuid,
+            self._socket.is_client_connected,
+            len(self._ext_uuids),
+        )
         if not uuid:
+            _log.warning("Start clicked but no extension selected (ext_uuids=%r)", self._ext_uuids)
             return
         self._socket.send({"type": "start_profiling", "uuid": uuid})
         self._profiling = True
@@ -331,6 +338,7 @@ class ProfilerView(Gtk.Box):
         self._ext_dropdown.set_sensitive(False)
 
     def _on_stop(self, _btn: Gtk.Button) -> None:
+        _log.debug("Stop clicked")
         self._socket.send({"type": "stop_profiling"})
         self._set_stopped()
 
@@ -411,6 +419,7 @@ class ProfilerView(Gtk.Box):
         self._flush_refresh()
 
     def _on_message(self, _server: SocketServer, msg: dict[str, Any]) -> None:
+        _log.debug("message received from bridge: type=%s", msg.get("type"))
         if msg.get("type") == "profile_event":
             self._ingest_event(msg)
         elif msg.get("type") == "profiling_stopped":
@@ -426,6 +435,7 @@ class ProfilerView(Gtk.Box):
         selected = self._selected_uuid()
         self._ext_uuids = [u for u in extensions if u != _BRIDGE_UUID]
         names = [extensions[u].get("name") or u for u in self._ext_uuids]
+        _log.debug("extensions_changed: %d available for profiling: %r", len(self._ext_uuids), self._ext_uuids)
 
         new_list = Gtk.StringList.new(names)
         self._ext_dropdown.set_model(new_list)

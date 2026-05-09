@@ -90,11 +90,14 @@ class SocketServer(GObject.Object):
     def send(self, message: dict[str, Any]) -> None:
         """Send a JSON message to the bridge extension."""
         if not self._output:
+            _log.debug("send() dropped — no client connected: %s", message.get("type"))
             return
+        _log.debug("send() → %s", message)
         try:
             data = (json.dumps(message) + "\n").encode()
             self._output.write_all(data, None)
             self._output.flush(None)
+            _log.debug("send() OK (%d bytes)", len(data))
         except GLib.Error as exc:
             _log.warning("Failed to send message: %s", exc)
 

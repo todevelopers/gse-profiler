@@ -47,16 +47,19 @@ export class Profiler {
         this.#callDepth = 0;
 
         const target = ext.stateObj;
+        log(`[gse-profiler-bridge] stateObj type=${typeof target} keys=${Object.getOwnPropertyNames(target).join(',')}`);
+
         // Patch own properties first (instance wins over prototype).
         this.#patchObject(target, target);
         // Then patch prototype chain (one level deep).
         const proto = Object.getPrototypeOf(target);
+        log(`[gse-profiler-bridge] proto=${proto?.constructor?.name ?? 'none'}`);
         if (proto && proto !== Object.prototype) {
             this.#patchObject(target, proto);
         }
 
         this.#running = true;
-        log(`[gse-profiler-bridge] profiling started: ${uuid} (${this.#patches.size} functions patched)`);
+        log(`[gse-profiler-bridge] profiling started: ${uuid} (${this.#patches.size} functions patched: ${[...this.#patches.keys()].join(',')})`);
         return true;
     }
 

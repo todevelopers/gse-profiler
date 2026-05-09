@@ -67,17 +67,22 @@ export default class GSEProfilerBridge extends Extension {
 
     /** @param {object} msg */
     _onMessage(msg) {
-        log(`[gse-profiler-bridge] message received: type=${msg.type}`);
+        log(`[gse-profiler-bridge] _onMessage: type=${msg.type} keys=${Object.keys(msg).join(',')}`);
         switch (msg.type) {
         case 'start_profiling': {
+            log(`[gse-profiler-bridge] start_profiling: uuid=${msg.uuid} profiler=${!!this._profiler}`);
             const ok = this._profiler?.startProfiling(msg.uuid) ?? false;
+            log(`[gse-profiler-bridge] start_profiling result: ok=${ok}`);
             this._socketClient?.send({ type: 'profiling_started', uuid: msg.uuid, ok });
             break;
         }
         case 'stop_profiling':
+            log('[gse-profiler-bridge] stop_profiling received');
             this._profiler?.stopProfiling();
             this._socketClient?.send({ type: 'profiling_stopped' });
             break;
+        default:
+            log(`[gse-profiler-bridge] unhandled message type: ${msg.type}`);
         }
     }
 }
