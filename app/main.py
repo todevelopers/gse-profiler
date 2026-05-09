@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from pathlib import Path
@@ -235,6 +236,12 @@ class Application(Adw.Application):
 
 
 def main() -> None:
+    debug = "--debug" in sys.argv
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     app = Application()
     app.run(sys.argv)
 
