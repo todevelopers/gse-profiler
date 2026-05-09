@@ -145,9 +145,8 @@ class SocketServer(GObject.Object):
                 pass
             return
 
-        assert self._istream is not None
         try:
-            line_bytes, _length = stream.read_line_finish(result)
+            line_bytes, _length = stream.read_line_finish(result)  # type: ignore[union-attr]
         except GLib.Error as exc:
             if exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.CANCELLED):
                 _log.debug("Socket read cancelled")
