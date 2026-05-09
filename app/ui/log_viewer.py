@@ -201,9 +201,19 @@ class LogViewerView(Gtk.Box):
         self._text_view.emit("copy-clipboard")
 
     def _on_export(self, _btn: Gtk.Button) -> None:
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        if self._uuid_filter:
+            # Strip domain suffix for brevity: "my-ext@example.com" → "my-ext"
+            short = self._uuid_filter.split("@")[0]
+            filename = f"gse-log_{short}_{ts}.txt"
+        else:
+            filename = f"gse-log_{ts}.txt"
+
         dialog = Gtk.FileDialog()
         dialog.set_title("Export Log")
-        dialog.set_initial_name("gse-profiler-log.txt")
+        dialog.set_initial_name(filename)
         dialog.save(self.get_root(), None, self._on_export_save, None)  # type: ignore[arg-type]
 
     def _on_export_save(
