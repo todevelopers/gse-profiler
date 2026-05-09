@@ -112,8 +112,9 @@ export class SocketClient {
                 const conn = obj.connect_finish(result);
                 this.#onConnected(conn);
             } catch (_e) {
-                if (!this.#stopping)
+                if (!this.#stopping) {
                     this.#scheduleConnect(RECONNECT_DELAY_MS);
+                }
             }
         });
     }
@@ -167,7 +168,8 @@ export class SocketClient {
         this.#connected = false;
         this.#connection = null;
         this.#outputStream = null;
-        if (!this.#stopping)
+        if (!this.#stopping) {
             this.#scheduleConnect(RECONNECT_DELAY_MS);
+        }
     }
 }
