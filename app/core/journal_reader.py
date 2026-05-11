@@ -1,15 +1,16 @@
 import json
 import logging
-import shutil
+import shlex
+import subprocess
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import gi
 
-gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
-from gi.repository import Gio, GLib, GObject
+from gi.repository import GLib, GObject
 
 _log = logging.getLogger(__name__)
 
@@ -24,6 +25,42 @@ PRIORITY_NAMES: dict[int, str] = {
     7: "DEBUG",
 }
 
+# Flags that JournalReader controls internally — strip from user command strings
+_OWNED_FLAGS = frozenset({"--follow", "-f", "--no-pager", "--output", "-o", "--lines", "-n"})
+_OWNED_PREFIXES = ("--output=", "--lines=", "--after-cursor=")
+
+
+def parse_extra_args(cmd_str: str) -> list[str]:
+    """Extract pass-through journalctl args from a user-supplied command string.
+
+    Strips 'journalctl' and flags owned by JournalReader (--follow/-f,
+    --output/-o, --lines/-n, --after-cursor, --no-pager).
+    Everything else (e.g. --user, -t, -u, --boot) is kept and forwarded.
+    """
+    try:
+        parts = shlex.split(cmd_str)
+    except ValueError:
+        return []
+
+    if parts and parts[0].split("/")[-1] == "journalctl":
+        parts = parts[1:]
+
+    result: list[str] = []
+    skip_next = False
+    for part in parts:
+        if skip_next:
+            skip_next = False
+            continue
+        if part in _OWNED_FLAGS:
+            if part in ("--output", "-o", "--lines", "-n"):
+                skip_next = True
+            continue
+        if any(part.startswith(p) for p in _OWNED_PREFIXES):
+            continue
+        result.append(part)
+
+    return result
+
 
 @dataclass
 class LogEntry:
@@ -36,10 +73,12 @@ class LogEntry:
 
 
 class JournalReader(GObject.Object):
-    """Async reader for journalctl --follow output.
+    """Polling journalctl reader using --after-cursor.
 
-    Spawns journalctl as a subprocess and emits a GObject signal per log entry.
-    Filters to gjs and gnome-shell identifiers to capture extension-relevant logs.
+    Instead of --follow (which suffers from pipe-buffering issues), each poll
+    spawns a short-lived journalctl process that exits cleanly and flushes all
+    output. The cursor from the last seen entry is passed to the next invocation
+    via --after-cursor so no entries are missed or duplicated.
     """
 
     __gtype_name__ = "JournalReader"
@@ -50,111 +89,95 @@ class JournalReader(GObject.Object):
 
     def __init__(self) -> None:
         super().__init__()
-        self._proc: Gio.Subprocess | None = None
-        self._stream: Gio.DataInputStream | None = None
-        self._cancellable: Gio.Cancellable | None = None
+        self._cursor: str | None = None
         self._running = False
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._extra_args: list[str] = []
+        # Generation counter lets idle callbacks discard stale batches after
+        # stop+start without needing a join on the main thread.
+        self._generation = 0
 
-    def start(self, uuid_filter: str | None = None) -> None:
-        """Start tailing the journal, optionally filtered by extension UUID."""
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def start(self, extra_args: list[str] | None = None) -> None:
         if self._running:
             return
+        self._extra_args = extra_args or []
+        self._cursor = None
+        self._generation += 1
         self._running = True
-
-        cmd = [
-            "journalctl",
-            "--user",
-            "--no-pager",
-            "--follow",
-            "-o", "json",
-            "-n", "200",
-            "-t", "gnome-shell",
-            "-t", "gjs",
-        ]
-
-        # When stdout is a pipe journalctl uses full buffering — new entries
-        # accumulate silently until the internal buffer fills up.  stdbuf -oL
-        # switches it to line-buffered mode so each JSON line is flushed immediately.
-        if shutil.which("stdbuf"):
-            cmd = ["stdbuf", "-oL"] + cmd
-
-        _log.debug("JournalReader cmd: %s", " ".join(cmd))
-
-        try:
-            # Keep stderr going to the terminal so journalctl errors are visible.
-            self._proc = Gio.Subprocess.new(
-                cmd,
-                Gio.SubprocessFlags.STDOUT_PIPE,
-            )
-        except GLib.Error as exc:
-            _log.error("Failed to spawn journalctl: %s", exc)
-            self._running = False
-            return
-
-        _log.debug("journalctl pid: %s", self._proc.get_identifier())
-        self._cancellable = Gio.Cancellable.new()
-        stdout = self._proc.get_stdout_pipe()
-        self._stream = Gio.DataInputStream.new(stdout)
-        self._stream.set_buffer_size(65536)
-        self._read_next_line()
-        _log.info("JournalReader started")
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self._thread.start()
+        _log.info("JournalReader started (polling, extra=%s)", self._extra_args)
 
     def stop(self) -> None:
-        """Stop reading and terminate the journalctl subprocess."""
+        if not self._running:
+            return
         self._running = False
-        if self._cancellable:
-            self._cancellable.cancel()
-            self._cancellable = None
-        if self._proc is not None:
-            try:
-                self._proc.force_exit()
-            except Exception:
-                pass
-            self._proc = None
-        self._stream = None
-        _log.info("JournalReader stopped")
+        self._stop_event.set()
+        # Do not join here — avoids freezing the GTK main loop.
+        # The thread is daemon=True and will exit within ≤ 1 second on its own.
+        self._thread = None
+        _log.info("JournalReader stop requested")
 
-    # ── Private ───────────────────────────────────────────────────────────────
+    # ── Poll loop (background thread) ─────────────────────────────────────────
 
-    def _read_next_line(self) -> None:
-        if not self._running or self._stream is None:
-            return
-        self._stream.read_line_async(
-            GLib.PRIORITY_LOW,
-            self._cancellable,
-            self._on_line_ready,
-            None,
-        )
+    def _poll_loop(self) -> None:
+        first = True
+        gen = self._generation
+        while not self._stop_event.is_set():
+            self._do_poll(gen=gen, initial=first)
+            first = False
+            self._stop_event.wait(timeout=1.0)
 
-    def _on_line_ready(
-        self,
-        stream: Gio.DataInputStream,
-        result: Gio.AsyncResult,
-        _user_data: None,
-    ) -> None:
+    def _do_poll(self, gen: int, initial: bool = False) -> None:
+        if self._cursor is None:
+            cmd = [
+                "journalctl", "--no-pager", "-o", "json", "-n", "200",
+            ] + self._extra_args
+        else:
+            cmd = [
+                "journalctl", "--no-pager", "-o", "json", "-n", "0",
+                f"--after-cursor={self._cursor}",
+            ] + self._extra_args
+
+        _log.debug("JournalReader poll: %s", " ".join(cmd))
         try:
-            line_bytes, _ = stream.read_line_finish(result)
-        except GLib.Error as exc:
-            if exc.matches(Gio.io_error_quark(), Gio.IOErrorEnum.CANCELLED):
-                _log.debug("JournalReader read cancelled")
-            elif self._running:
-                _log.error("journalctl read error: %s", exc)
-            self._running = False
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=10
+            )
+        except subprocess.TimeoutExpired:
+            _log.warning("journalctl poll timed out")
+            return
+        except OSError as exc:
+            _log.error("journalctl spawn failed: %s", exc)
             return
 
-        if line_bytes is None:
-            _log.warning("journalctl EOF — reader stopped (process may have exited)")
-            self._running = False
-            return
-
-        line = line_bytes.decode("utf-8", errors="replace").strip()
-        _log.debug("journal raw line (%d bytes): %s", len(line), line[:120])
-        if line:
+        entries: list[LogEntry] = []
+        for raw_line in result.stdout.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
             entry = self._parse_line(line)
             if entry is not None:
-                self.emit("log-entry", entry)
+                cursor = entry.raw.get("__CURSOR")
+                if cursor:
+                    self._cursor = cursor
+                entries.append(entry)
 
-        self._read_next_line()
+        if entries:
+            GLib.idle_add(self._emit_batch, entries, gen)
+
+    def _emit_batch(self, entries: list[LogEntry], gen: int) -> bool:
+        # Discard if reader was stopped or restarted since this poll ran.
+        if self._running and gen == self._generation:
+            for entry in entries:
+                self.emit("log-entry", entry)
+        return GLib.SOURCE_REMOVE
+
+    # ── Parsing ───────────────────────────────────────────────────────────────
 
     def _parse_line(self, line: str) -> "LogEntry | None":
         try:

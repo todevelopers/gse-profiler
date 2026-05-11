@@ -1,5 +1,7 @@
+import json
 import logging
 import re
+from pathlib import Path
 
 import gi
 
@@ -9,14 +11,14 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject, Gtk
 
 from app.core.dbus_client import DBusClient
-from app.core.journal_reader import JournalReader, LogEntry
+from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
 
 _log = logging.getLogger(__name__)
 
 MAX_ENTRIES = 5000
+_DEFAULT_CMD = "journalctl --user -f"
+_SETTINGS_KEY = "journal_cmd"
 
-# Priority threshold for each level filter option.
-# "Show entries at this level and above" = priority <= threshold.
 _LEVEL_OPTIONS: list[tuple[str, int | None]] = [
     ("All Levels", None),
     ("DEBUG", 7),
@@ -29,11 +31,10 @@ _LEVEL_OPTIONS: list[tuple[str, int | None]] = [
 _LEVEL_NAMES = [label for label, _ in _LEVEL_OPTIONS]
 _LEVEL_THRESHOLDS = {label: threshold for label, threshold in _LEVEL_OPTIONS}
 
-# GtkTextBuffer tag names per priority range
 _PRIORITY_TAG: dict[int, str] = {
     7: "tag-debug",
     6: "tag-info",
-    5: "tag-info",   # NOTICE → INFO display
+    5: "tag-info",
     4: "tag-warning",
     3: "tag-error",
     2: "tag-error",
@@ -41,16 +42,34 @@ _PRIORITY_TAG: dict[int, str] = {
     0: "tag-error",
 }
 
-# Parses GJS log() format: optional "JS LOG: " prefix, then [tag] body
 _MSG_TAG_RE = re.compile(r'^(?:JS LOG:\s*)?\[([^\]]+)\]\s*(.*)', re.DOTALL)
 
 
 def _extract_log_tag(message: str) -> tuple[str | None, str]:
-    """Return (tag, body) if message starts with [tag], else (None, message)."""
     m = _MSG_TAG_RE.match(message)
     if m:
         return m.group(1), m.group(2)
     return None, message
+
+
+def _settings_path() -> Path:
+    return Path(GLib.get_user_config_dir()) / "gse-profiler" / "log-viewer.json"
+
+
+def _load_settings() -> dict:
+    p = _settings_path()
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_settings(data: dict) -> None:
+    p = _settings_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 class LogViewerView(Gtk.Box):
@@ -69,17 +88,50 @@ class LogViewerView(Gtk.Box):
         self._search_text = ""
         self._auto_scroll = True
         self._skip_filter_update = False
+        self._is_running = False
+
+        settings = _load_settings()
+        self._journal_cmd = settings.get(_SETTINGS_KEY, _DEFAULT_CMD)
 
         self._build_ui()
         self._setup_tags()
 
         dbus_client.connect("extensions-changed", self._on_extensions_changed)
         self._reader.connect("log-entry", self._on_log_entry)
-        self._reader.start()
+        self.connect("destroy", lambda _w: self._reader.stop())
 
     # ── UI construction ────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        # ── Command bar ─────────────────────────────────────────────────────
+        cmd_label = Gtk.Label(label="Command:")
+        cmd_label.set_margin_start(2)
+
+        self._cmd_entry = Gtk.Entry()
+        self._cmd_entry.set_text(self._journal_cmd)
+        self._cmd_entry.set_hexpand(True)
+        self._cmd_entry.set_placeholder_text("journalctl --user -f")
+        self._cmd_entry.set_tooltip_text(
+            "journalctl command to tail — --follow/-f is replaced by 1 s polling; "
+            "-o/-n/--after-cursor are managed internally"
+        )
+        self._cmd_entry.connect("activate", self._on_cmd_activate)
+        self._cmd_entry.connect("changed", self._on_cmd_changed)
+
+        self._start_stop_btn = Gtk.Button(label="Start")
+        self._start_stop_btn.add_css_class("suggested-action")
+        self._start_stop_btn.set_tooltip_text("Start reading the journal")
+        self._start_stop_btn.connect("clicked", self._on_start_stop)
+
+        cmd_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        cmd_bar.set_margin_start(6)
+        cmd_bar.set_margin_end(6)
+        cmd_bar.set_margin_top(6)
+        cmd_bar.set_margin_bottom(6)
+        cmd_bar.append(cmd_label)
+        cmd_bar.append(self._cmd_entry)
+        cmd_bar.append(self._start_stop_btn)
+
         # ── Filter bar ──────────────────────────────────────────────────────
         self._uuid_list = Gtk.StringList.new(["All Extensions"])
         self._uuid_dropdown = Gtk.DropDown.new(self._uuid_list, None)
@@ -122,7 +174,7 @@ class LogViewerView(Gtk.Box):
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_bar.set_margin_start(6)
         filter_bar.set_margin_end(6)
-        filter_bar.set_margin_top(6)
+        filter_bar.set_margin_top(0)
         filter_bar.set_margin_bottom(6)
         filter_bar.append(self._uuid_dropdown)
         filter_bar.append(self._level_dropdown)
@@ -152,6 +204,8 @@ class LogViewerView(Gtk.Box):
         vadj = self._scroll.get_vadjustment()
         vadj.connect("changed", self._on_scroll_adjusted)
 
+        self.append(cmd_bar)
+        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         self.append(filter_bar)
         self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         self.append(self._scroll)
@@ -162,8 +216,42 @@ class LogViewerView(Gtk.Box):
         buf.create_tag("tag-warning", foreground="#E5A50A")
         buf.create_tag("tag-info")
         buf.create_tag("tag-debug", foreground="#888888")
-        # Created last so it has highest priority for background rendering
         buf.create_tag("tag-search", background="#F6D32D", foreground="#000000")
+
+    # ── Command bar handlers ───────────────────────────────────────────────
+
+    def _on_cmd_activate(self, _entry: Gtk.Entry) -> None:
+        if not self._is_running:
+            self._do_start()
+
+    def _on_cmd_changed(self, entry: Gtk.Entry) -> None:
+        self._journal_cmd = entry.get_text()
+        _save_settings({_SETTINGS_KEY: self._journal_cmd})
+
+    def _on_start_stop(self, _btn: Gtk.Button) -> None:
+        if self._is_running:
+            self._do_stop()
+        else:
+            self._do_start()
+
+    def _do_start(self) -> None:
+        extra = parse_extra_args(self._journal_cmd)
+        self._reader.start(extra_args=extra)
+        self._is_running = True
+        self._start_stop_btn.set_label("Stop")
+        self._start_stop_btn.remove_css_class("suggested-action")
+        self._start_stop_btn.add_css_class("destructive-action")
+        self._start_stop_btn.set_tooltip_text("Stop reading the journal")
+        self._cmd_entry.set_sensitive(False)
+
+    def _do_stop(self) -> None:
+        self._reader.stop()
+        self._is_running = False
+        self._start_stop_btn.set_label("Start")
+        self._start_stop_btn.remove_css_class("destructive-action")
+        self._start_stop_btn.add_css_class("suggested-action")
+        self._start_stop_btn.set_tooltip_text("Start reading the journal")
+        self._cmd_entry.set_sensitive(True)
 
     # ── Signal handlers — filters ──────────────────────────────────────────
 
@@ -223,7 +311,6 @@ class LogViewerView(Gtk.Box):
 
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         if self._uuid_filter:
-            # Strip domain suffix for brevity: "my-ext@example.com" → "my-ext"
             short = self._uuid_filter.split("@")[0]
             filename = f"gse-log_{short}_{ts}.txt"
         else:
@@ -283,8 +370,6 @@ class LogViewerView(Gtk.Box):
         if self._level_threshold is not None and entry.priority > self._level_threshold:
             return False
         if self._uuid_filter:
-            # Match only messages with [short-name] bracket tag to exclude gnome-shell
-            # system messages that mention the UUID without a bracket prefix.
             short = self._uuid_filter.split("@")[0]
             if f"[{short}]" not in entry.message:
                 return False
@@ -318,7 +403,6 @@ class LogViewerView(Gtk.Box):
         end = buf.get_end_iter()
         mark_start = buf.get_char_count()
         buf.insert(end, line)
-        # Re-acquire iters after modification
         start_iter = buf.get_iter_at_offset(mark_start)
         end_iter = buf.get_end_iter()
         buf.apply_tag_by_name(tag_name, start_iter, end_iter)
