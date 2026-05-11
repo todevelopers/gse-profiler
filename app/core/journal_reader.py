@@ -139,7 +139,7 @@ class JournalReader(GObject.Object):
             ] + self._extra_args
         else:
             cmd = [
-                "journalctl", "--no-pager", "-o", "json", "-n", "0",
+                "journalctl", "--no-pager", "-o", "json",
                 f"--after-cursor={self._cursor}",
             ] + self._extra_args
 
