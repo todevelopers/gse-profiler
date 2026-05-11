@@ -65,10 +65,8 @@ class JournalReader(GObject.Object):
             "--follow",
             "-o", "json",
             "-n", "200",
-            # Filter to gnome-shell / gjs log sources using disjunction (+)
-            "SYSLOG_IDENTIFIER=gjs",
-            "+",
-            "SYSLOG_IDENTIFIER=gnome-shell",
+            "-t", "gnome-shell",
+            "-t", "gjs",
         ]
 
         try:
