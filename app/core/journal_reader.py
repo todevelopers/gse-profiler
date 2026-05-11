@@ -63,6 +63,7 @@ class JournalReader(GObject.Object):
 
         cmd = [
             "journalctl",
+            "--user",
             "--no-pager",
             "--follow",
             "-o", "json",
