@@ -143,7 +143,6 @@ class JournalReader(GObject.Object):
                 f"--after-cursor={self._cursor}",
             ] + self._extra_args
 
-        _log.debug("JournalReader poll: %s", " ".join(cmd))
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=10
