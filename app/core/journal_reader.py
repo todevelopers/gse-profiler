@@ -1,5 +1,6 @@
 import json
 import logging
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -62,12 +63,19 @@ class JournalReader(GObject.Object):
 
         cmd = [
             "journalctl",
+            "--no-pager",
             "--follow",
             "-o", "json",
             "-n", "200",
             "-t", "gnome-shell",
             "-t", "gjs",
         ]
+
+        # When stdout is a pipe journalctl uses full buffering — new entries
+        # accumulate silently until the internal buffer fills up.  stdbuf -oL
+        # switches it to line-buffered mode so each JSON line is flushed immediately.
+        if shutil.which("stdbuf"):
+            cmd = ["stdbuf", "-oL"] + cmd
 
         _log.debug("JournalReader cmd: %s", " ".join(cmd))
 
