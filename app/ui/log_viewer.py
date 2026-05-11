@@ -52,6 +52,7 @@ class LogViewerView(Gtk.Box):
 
         # Filter state
         self._uuid_filter: str | None = None
+        self._ext_uuids: list[str] = []
         self._level_threshold: int | None = None
         self._search_text = ""
         self._auto_scroll = True
@@ -156,12 +157,14 @@ class LogViewerView(Gtk.Box):
 
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict) -> None:
         self._skip_filter_update = True
-        current = self._uuid_filter or "All Extensions"
+        current_uuid = self._uuid_filter
         uuids = sorted(extensions.keys())
-        items = ["All Extensions"] + uuids
+        names = [extensions[u].get("name") or u for u in uuids]
+        self._ext_uuids = uuids
+        items = ["All Extensions"] + names
         self._uuid_list.splice(0, self._uuid_list.get_n_items(), items)
-        if current in items:
-            self._uuid_dropdown.set_selected(items.index(current))
+        if current_uuid and current_uuid in self._ext_uuids:
+            self._uuid_dropdown.set_selected(self._ext_uuids.index(current_uuid) + 1)
         else:
             self._uuid_dropdown.set_selected(0)
             self._uuid_filter = None
@@ -171,9 +174,12 @@ class LogViewerView(Gtk.Box):
     def _on_uuid_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:
         if self._skip_filter_update:
             return
-        item = dropdown.get_selected_item()
-        value = item.get_string() if item else "All Extensions"
-        self._uuid_filter = None if value == "All Extensions" else value
+        idx = dropdown.get_selected()
+        if idx == 0 or idx == Gtk.INVALID_LIST_POSITION:
+            self._uuid_filter = None
+        else:
+            uuid_idx = idx - 1
+            self._uuid_filter = self._ext_uuids[uuid_idx] if 0 <= uuid_idx < len(self._ext_uuids) else None
         self._rebuild_buffer()
 
     def _on_level_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:
@@ -264,8 +270,11 @@ class LogViewerView(Gtk.Box):
     def _entry_matches(self, entry: LogEntry) -> bool:
         if self._level_threshold is not None and entry.priority > self._level_threshold:
             return False
-        if self._uuid_filter and self._uuid_filter not in entry.message:
-            return False
+        if self._uuid_filter:
+            # Extensions log with short name (before @), e.g. "my-ext@domain" → "my-ext"
+            short = self._uuid_filter.split("@")[0]
+            if short not in entry.message:
+                return False
         if self._search_text and self._search_text.lower() not in entry.message.lower():
             return False
         return True

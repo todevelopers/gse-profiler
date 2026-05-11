@@ -18,6 +18,10 @@ const GSEProfilerIndicator = GObject.registerClass(
                 icon_name: 'media-playback-pause-symbolic',
                 style_class: 'system-status-icon',
             }));
+            this.connect('button-press-event', () => {
+                log('[gse-profiler-bridge] Status button clicked');
+                return false;
+            });
         }
     }
 );
