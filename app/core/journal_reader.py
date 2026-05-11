@@ -174,7 +174,7 @@ class JournalReader(GObject.Object):
         if self._running and gen == self._generation:
             for entry in entries:
                 self.emit("log-entry", entry)
-        return GLib.SOURCE_REMOVE
+        return bool(GLib.SOURCE_REMOVE)
 
     # ── Parsing ───────────────────────────────────────────────────────────────
 

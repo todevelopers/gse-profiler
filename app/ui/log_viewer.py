@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import cast
 
 import gi
 
@@ -56,11 +57,11 @@ def _settings_path() -> Path:
     return Path(GLib.get_user_config_dir()) / "gse-profiler" / "log-viewer.json"
 
 
-def _load_settings() -> dict:
+def _load_settings() -> dict[str, object]:
     p = _settings_path()
     if p.exists():
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            return cast(dict[str, object], json.loads(p.read_text(encoding="utf-8")))
         except Exception:
             pass
     return {}
