@@ -92,7 +92,8 @@ class LogViewerView(Gtk.Box):
         self._is_running = False
 
         settings = _load_settings()
-        self._journal_cmd = settings.get(_SETTINGS_KEY, _DEFAULT_CMD)
+        cmd = settings.get(_SETTINGS_KEY, _DEFAULT_CMD)
+        self._journal_cmd: str = cmd if isinstance(cmd, str) else _DEFAULT_CMD
 
         self._build_ui()
         self._setup_tags()
