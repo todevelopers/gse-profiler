@@ -1,4 +1,5 @@
 import logging
+import re
 
 import gi
 
@@ -39,6 +40,17 @@ _PRIORITY_TAG: dict[int, str] = {
     1: "tag-error",
     0: "tag-error",
 }
+
+# Parses GJS log() format: optional "JS LOG: " prefix, then [tag] body
+_MSG_TAG_RE = re.compile(r'^(?:JS LOG:\s*)?\[([^\]]+)\]\s*(.*)', re.DOTALL)
+
+
+def _extract_log_tag(message: str) -> tuple[str | None, str]:
+    """Return (tag, body) if message starts with [tag], else (None, message)."""
+    m = _MSG_TAG_RE.match(message)
+    if m:
+        return m.group(1), m.group(2)
+    return None, message
 
 
 class LogViewerView(Gtk.Box):
@@ -271,9 +283,10 @@ class LogViewerView(Gtk.Box):
         if self._level_threshold is not None and entry.priority > self._level_threshold:
             return False
         if self._uuid_filter:
-            # Extensions log with short name (before @), e.g. "my-ext@domain" → "my-ext"
+            # Match only messages with [short-name] bracket tag to exclude gnome-shell
+            # system messages that mention the UUID without a bracket prefix.
             short = self._uuid_filter.split("@")[0]
-            if short not in entry.message:
+            if f"[{short}]" not in entry.message:
                 return False
         if self._search_text and self._search_text.lower() not in entry.message.lower():
             return False
@@ -293,11 +306,13 @@ class LogViewerView(Gtk.Box):
 
     def _append_to_buffer(self, entry: LogEntry) -> None:
         buf = self._text_view.get_buffer()
+        tag, body = _extract_log_tag(entry.message)
+        identifier = tag if tag else entry.identifier
         line = (
             f"{entry.timestamp.strftime('%H:%M:%S')} "
             f"[{entry.priority_name:<7}] "
-            f"[{entry.identifier}] "
-            f"{entry.message}\n"
+            f"[{identifier}] "
+            f"{body}\n"
         )
         tag_name = _PRIORITY_TAG.get(entry.priority, "tag-info")
         end = buf.get_end_iter()
