@@ -69,16 +69,20 @@ class JournalReader(GObject.Object):
             "-t", "gjs",
         ]
 
+        _log.debug("JournalReader cmd: %s", " ".join(cmd))
+
         try:
+            # Keep stderr going to the terminal so journalctl errors are visible.
             self._proc = Gio.Subprocess.new(
                 cmd,
-                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+                Gio.SubprocessFlags.STDOUT_PIPE,
             )
         except GLib.Error as exc:
             _log.error("Failed to spawn journalctl: %s", exc)
             self._running = False
             return
 
+        _log.debug("journalctl pid: %s", self._proc.get_identifier())
         self._cancellable = Gio.Cancellable.new()
         stdout = self._proc.get_stdout_pipe()
         self._stream = Gio.DataInputStream.new(stdout)
@@ -130,11 +134,12 @@ class JournalReader(GObject.Object):
             return
 
         if line_bytes is None:
-            _log.info("journalctl EOF — reader stopped")
+            _log.warning("journalctl EOF — reader stopped (process may have exited)")
             self._running = False
             return
 
         line = line_bytes.decode("utf-8", errors="replace").strip()
+        _log.debug("journal raw line (%d bytes): %s", len(line), line[:120])
         if line:
             entry = self._parse_line(line)
             if entry is not None:
