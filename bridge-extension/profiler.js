@@ -42,6 +42,7 @@ export class Profiler {
         }
 
         const ext = Main.extensionManager.lookup(uuid);
+        log(`[gse-profiler-bridge] startProfiling: lookup=${!!ext} state=${ext?.state} stateObj=${!!ext?.stateObj}`);
         if (!ext?.stateObj) {
             log(`[gse-profiler-bridge] startProfiling: no stateObj for ${uuid}`);
             return false;

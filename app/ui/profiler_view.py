@@ -11,7 +11,7 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject, Gtk
 
-from app.core.dbus_client import DBusClient
+from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
@@ -427,6 +427,7 @@ class ProfilerView(Gtk.Box):
             _log.info("profiling_started: uuid=%s ok=%s", msg.get("uuid"), msg.get("ok"))
             if not msg.get("ok"):
                 _log.warning("Bridge could not find stateObj for %s — no functions patched", msg.get("uuid"))
+                self._set_stopped()
         elif msg_type == "profiling_stopped":
             _log.debug("profiling_stopped received")
             self._set_stopped()
@@ -441,7 +442,10 @@ class ProfilerView(Gtk.Box):
         self, _dbus: DBusClient, extensions: dict[str, Any]
     ) -> None:
         selected = self._selected_uuid()
-        self._ext_uuids = [u for u in extensions if u != _BRIDGE_UUID]
+        self._ext_uuids = [
+            u for u in extensions
+            if u != _BRIDGE_UUID and extensions[u].get("state") == ExtensionState.ENABLED
+        ]
         names = [extensions[u].get("name") or u for u in self._ext_uuids]
         _log.debug("extensions_changed: %d available for profiling: %r", len(self._ext_uuids), self._ext_uuids)
 

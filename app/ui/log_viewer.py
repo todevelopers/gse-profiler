@@ -11,7 +11,7 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject, Gtk
 
-from app.core.dbus_client import DBusClient
+from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
 
 _log = logging.getLogger(__name__)
@@ -260,7 +260,9 @@ class LogViewerView(Gtk.Box):
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict) -> None:
         self._skip_filter_update = True
         current_uuid = self._uuid_filter
-        uuids = sorted(extensions.keys())
+        uuids = sorted(
+            u for u in extensions if extensions[u].get("state") == ExtensionState.ENABLED
+        )
         names = [extensions[u].get("name") or u for u in uuids]
         self._ext_uuids = uuids
         items = ["All Extensions"] + names
