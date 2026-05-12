@@ -9,7 +9,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
@@ -243,8 +243,20 @@ class ProfilerView(Gtk.Box):
         width: int,
         _height: int,
     ) -> None:
+        dark = Adw.StyleManager.get_default().get_dark()
+        if dark:
+            c_bg       = (0.12, 0.12, 0.15)
+            c_row_alt  = (0.18, 0.18, 0.23)
+            c_text     = (0.88, 0.88, 0.88)
+            c_tick     = (0.55, 0.55, 0.55)
+        else:
+            c_bg       = (0.96, 0.96, 0.97)
+            c_row_alt  = (0.90, 0.90, 0.95)
+            c_text     = (0.12, 0.12, 0.12)
+            c_tick     = (0.35, 0.35, 0.35)
+
         if not self._raw_events:
-            cr.set_source_rgb(0.55, 0.55, 0.55)
+            cr.set_source_rgb(*c_tick)
             cr.select_font_face("sans", 0, 0)
             cr.set_font_size(12)
             text = "No profiling data — start profiling to see the timeline"
@@ -278,20 +290,20 @@ class ProfilerView(Gtk.Box):
         cr.set_font_size(10)
 
         # Background.
-        cr.set_source_rgb(0.96, 0.96, 0.97)
+        cr.set_source_rgb(*c_bg)
         cr.paint()
 
         # Alternating row backgrounds.
         for fn, row in seen.items():
             y = PAD_TOP + row * ROW_H
             if row % 2 == 0:
-                cr.set_source_rgb(0.90, 0.90, 0.95)
+                cr.set_source_rgb(*c_row_alt)
                 cr.rectangle(0, y, width, ROW_H)
                 cr.fill()
 
             # Function label (truncated).
             label = fn if len(fn) <= 23 else f"…{fn[-22:]}"
-            cr.set_source_rgb(0.12, 0.12, 0.12)
+            cr.set_source_rgb(*c_text)
             cr.move_to(4, y + ROW_H - 5)
             cr.show_text(label)
 
@@ -306,15 +318,15 @@ class ProfilerView(Gtk.Box):
             cr.rectangle(x, y, bar_w, ROW_H - 6)
             cr.fill()
 
-        # Time axis ticks (5 evenly-spaced).
-        cr.set_source_rgb(0.35, 0.35, 0.35)
+        # Time axis ticks (5 evenly-spaced), relative to profiling start.
+        cr.set_source_rgb(*c_tick)
         cr.set_line_width(0.5)
         for tick in range(5):
             x = LABEL_W + tick / 4 * chart_w
             cr.move_to(x, PAD_TOP - 1)
             cr.line_to(x, needed_h - PAD_BOT)
             cr.stroke()
-            t_ms = (min_t + tick / 4 * time_span) * 1000
+            t_ms = tick / 4 * time_span * 1000
             cr.move_to(x + 2, PAD_TOP - 4)
             cr.show_text(f"{t_ms:.1f}ms")
 
