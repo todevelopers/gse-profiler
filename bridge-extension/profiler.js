@@ -5,6 +5,14 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 // Base classes whose methods we never patch (framework internals).
 const _STOP_CLASSES = new Set(['Extension', 'Object']);
+// GJS names GObject C types as Namespace_ClassName (e.g. St_Widget, Gio_File).
+// Stop the prototype walk when we reach one of these to avoid patching internals.
+const _FRAMEWORK_RE = /^(St_|Clutter_|Meta_|Shell_|GObject_|Gio_|GLib_|Mutter_|Gdk_|Gtk_|Pango_|Atk_|Soup_|Json_)/;
+
+function _isStopProto(proto) {
+    const name = proto?.constructor?.name ?? '';
+    return _STOP_CLASSES.has(name) || _FRAMEWORK_RE.test(name);
+}
 
 /**
  * Extension function profiler — monkey-patches a target extension's exported
@@ -31,7 +39,8 @@ export class Profiler {
     }
 
     /**
-     * Monkey-patch all functions on the extension's stateObj.
+     * Monkey-patch all functions on the extension's stateObj and its direct
+     * object-valued own properties (e.g. _indicator).
      * Walks the full prototype chain (excluding framework base classes).
      * @param {string} uuid
      * @returns {boolean} whether patching succeeded
@@ -55,16 +64,33 @@ export class Profiler {
         const ownKeys = Object.getOwnPropertyNames(target);
         log(`[gse-profiler-bridge] stateObj constructor=${target?.constructor?.name} ownKeys=[${ownKeys.join(',')}]`);
 
-        // Walk the full prototype chain, stopping at known framework base classes.
+        // Walk the stateObj's prototype chain, stopping at framework base classes.
         let proto = target;
         while (proto) {
-            const ctorName = proto.constructor?.name ?? '';
-            if (_STOP_CLASSES.has(ctorName)) {
-                break;
-            }
-            log(`[gse-profiler-bridge] patching proto level: ${ctorName} keys=[${Object.getOwnPropertyNames(proto).join(',')}]`);
-            this.#patchObject(target, proto);
+            if (_isStopProto(proto)) break;
+            log(`[gse-profiler-bridge] patching proto level: ${proto.constructor?.name} keys=[${Object.getOwnPropertyNames(proto).join(',')}]`);
+            this.#patchObject(target, proto, '');
             proto = Object.getPrototypeOf(proto);
+        }
+
+        // Also walk direct object-valued own properties (e.g. _indicator, _fetcher).
+        const visited = new Set([target]);
+        for (const propKey of ownKeys) {
+            let propDesc;
+            try {
+                propDesc = Object.getOwnPropertyDescriptor(target, propKey);
+            } catch (_e) { continue; }
+            const val = propDesc?.value;
+            if (!val || typeof val !== 'object' || visited.has(val)) continue;
+            visited.add(val);
+
+            let sub = val;
+            while (sub) {
+                if (_isStopProto(sub)) break;
+                log(`[gse-profiler-bridge] patching sub ${propKey} level: ${sub.constructor?.name} keys=[${Object.getOwnPropertyNames(sub).join(',')}]`);
+                this.#patchObject(val, sub, propKey);
+                sub = Object.getPrototypeOf(sub);
+            }
         }
 
         this.#running = true;
@@ -99,15 +125,18 @@ export class Profiler {
 
     /**
      * Enumerate own function-valued properties of `source` and install
-     * timing wrappers on `holder` (the stateObj instance).
-     * Instance properties take precedence — already-patched names are skipped.
+     * timing wrappers on `holder`.
+     * Instance properties take precedence — already-patched keys are skipped.
      * @param {object} holder - object to write the patched functions onto
      * @param {object} source - object whose properties are enumerated
+     * @param {string} prefix - prepended to the function name in profile events
+     *   (e.g. "_indicator" → event function = "_indicator.methodName")
      */
-    #patchObject(holder, source) {
+    #patchObject(holder, source, prefix) {
         for (const name of Object.getOwnPropertyNames(source)) {
             if (name === 'constructor') { continue; }
-            if (this.#patches.has(name)) { continue; }
+            const patchKey = prefix ? `${prefix}.${name}` : name;
+            if (this.#patches.has(patchKey)) { continue; }
 
             let desc;
             try {
@@ -118,10 +147,10 @@ export class Profiler {
             if (!desc || typeof desc.value !== 'function') { continue; }
 
             const original = desc.value;
-            this.#patches.set(name, { holder, name, original });
+            this.#patches.set(patchKey, { holder, name, original });
 
             const profiler = this;
-            const funcName = name;
+            const funcName = patchKey;
             holder[name] = function profiled(...args) {
                 if (!profiler.#running) {
                     return original.apply(this, args);
