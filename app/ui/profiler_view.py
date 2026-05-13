@@ -593,8 +593,22 @@ class ProfilerView(Gtk.Box):
     def _flush_refresh(self) -> None:
         self._refresh_pending = False
         self._recompute_self_times()
-        self._store.splice(0, self._store.get_n_items(), list(self._stats.values()))
+        # Fresh FunctionStat instances every refresh: GtkColumnView skips
+        # unbind+bind when the same GObject pointer reappears at a given
+        # position, which otherwise leaves stale counts in the table cells
+        # whenever a stat updates in place between flushes.
+        snapshots = [self._stat_snapshot(s) for s in self._stats.values()]
+        self._store.splice(0, self._store.get_n_items(), snapshots)
         self._timeline.queue_draw()
+
+    @staticmethod
+    def _stat_snapshot(stat: FunctionStat) -> FunctionStat:
+        snap = FunctionStat(stat.name)
+        snap.count = stat.count
+        snap.total_ms = stat.total_ms
+        snap.self_ms = stat.self_ms
+        snap.max_ms = stat.max_ms
+        return snap
 
     def _recompute_self_times(self) -> None:
         """Aggregate per-function self-time = total minus direct children.
