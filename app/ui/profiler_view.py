@@ -156,7 +156,7 @@ class ProfilerView(Gtk.Box):
         timeline_scroll = Gtk.ScrolledWindow()
         timeline_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         timeline_scroll.set_min_content_height(120)
-        timeline_scroll.set_max_content_height(400)
+        timeline_scroll.set_vexpand(True)
         timeline_scroll.set_child(self._timeline)
 
         tl_label = Gtk.Label(label="Timeline")
@@ -166,6 +166,7 @@ class ProfilerView(Gtk.Box):
         tl_label.add_css_class("heading")
 
         timeline_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        timeline_box.set_vexpand(True)
         timeline_box.append(tl_label)
         timeline_box.append(timeline_scroll)
 
