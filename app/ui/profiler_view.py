@@ -28,6 +28,11 @@ _DEPTH_COLORS: list[tuple[float, float, float]] = [
     (0.55, 0.72, 0.18),
 ]
 
+# Idle periods longer than this collapse into a visual break on the timeline.
+_GAP_THRESHOLD_S = 2.0
+# Pixel width of the collapsed-gap break drawn between segments.
+_GAP_BREAK_PX = 22
+
 
 class FunctionStat(GObject.Object):
     """Aggregated timing statistics for a single profiled function."""
@@ -39,6 +44,7 @@ class FunctionStat(GObject.Object):
         self.name = name
         self.count: int = 0
         self.total_ms: float = 0.0
+        self.self_ms: float = 0.0
         self.max_ms: float = 0.0
 
     @property
@@ -139,6 +145,7 @@ class ProfilerView(Gtk.Box):
         col_view.append_column(self._make_col("Function", "name", str, expand=True))
         col_view.append_column(self._make_col("Calls", "count", str))
         col_view.append_column(self._make_col("Total ms", "total_ms", lambda v: f"{v:.3f}"))
+        col_view.append_column(self._make_col("Self ms", "self_ms", lambda v: f"{v:.3f}"))
         col_view.append_column(self._make_col("Avg ms", "avg_ms", lambda v: f"{v:.3f}"))
         col_view.append_column(self._make_col("Max ms", "max_ms", lambda v: f"{v:.3f}"))
 
@@ -237,25 +244,39 @@ class ProfilerView(Gtk.Box):
 
     # ── Timeline drawing ───────────────────────────────────────────────────
 
-    def _visible_range(self) -> tuple[float, float, int]:
-        """Return (min_t, display_max_t, hidden_count).
+    def _visible_segments(self) -> list[tuple[float, float]]:
+        """Return active-time segments separated by collapsed idle gaps.
 
-        Clips after the first idle gap > 2 s so that short activity
-        bursts are not compressed into invisible slivers by long
-        background polling intervals.
+        Iterates events in start-order, tracking the running max end-time
+        seen so far. A segment closes when the next event's start is more
+        than ``_GAP_THRESHOLD_S`` past that max — this correctly handles
+        long-running parents whose end time follows several shorter
+        children in start-order.
         """
         if not self._raw_events:
-            return 0.0, 1.0, 0
+            return []
         ordered = sorted(self._raw_events, key=lambda e: e["start"])
-        min_t = ordered[0]["start"]
-        for i in range(1, len(ordered)):
-            gap = ordered[i]["start"] - ordered[i - 1]["end"]
-            if gap > 2.0:
-                clip_t = ordered[i - 1]["end"]
-                # +5 % padding so the last bar is not flush against the edge.
-                display_max_t = clip_t + max((clip_t - min_t) * 0.05, 0.001)
-                return min_t, display_max_t, len(ordered) - i
-        return min_t, ordered[-1]["end"], 0
+        segments: list[tuple[float, float]] = []
+        seg_start = ordered[0]["start"]
+        running_end = ordered[0]["end"]
+        for e in ordered[1:]:
+            if e["start"] - running_end > _GAP_THRESHOLD_S:
+                segments.append((seg_start, running_end))
+                seg_start = e["start"]
+                running_end = e["end"]
+            else:
+                if e["end"] > running_end:
+                    running_end = e["end"]
+        segments.append((seg_start, running_end))
+        return segments
+
+    @staticmethod
+    def _format_gap(seconds: float) -> str:
+        if seconds < 1.0:
+            return f"+{seconds * 1000:.0f}ms"
+        if seconds < 60.0:
+            return f"+{seconds:.1f}s"
+        return f"+{seconds / 60:.1f}m"
 
     def _draw_timeline(
         self,
@@ -270,11 +291,13 @@ class ProfilerView(Gtk.Box):
             c_row_alt  = (0.18, 0.18, 0.23)
             c_text     = (0.88, 0.88, 0.88)
             c_tick     = (0.55, 0.55, 0.55)
+            c_gap_bg   = (0.08, 0.08, 0.10)
         else:
             c_bg       = (0.96, 0.96, 0.97)
             c_row_alt  = (0.90, 0.90, 0.95)
             c_text     = (0.12, 0.12, 0.12)
             c_tick     = (0.35, 0.35, 0.35)
+            c_gap_bg   = (0.82, 0.82, 0.84)
 
         if not self._raw_events:
             cr.set_source_rgb(*c_tick)
@@ -286,8 +309,9 @@ class ProfilerView(Gtk.Box):
             cr.show_text(text)
             return
 
-        min_t, display_max_t, hidden_count = self._visible_range()
-        time_span = display_max_t - min_t or 1e-9
+        segments = self._visible_segments()
+        active_total = sum(e - s for s, e in segments) or 1e-9
+        n_breaks = len(segments) - 1
 
         # Unique function names in order of first appearance.
         seen: dict[str, int] = {}
@@ -299,12 +323,21 @@ class ProfilerView(Gtk.Box):
         LABEL_W = 160
         ROW_H = 22
         PAD_TOP = 18  # space for time axis labels
-        PAD_BOT = 18 if hidden_count else 4
+        PAD_BOT = 4
         chart_w = max(width - LABEL_W - 4, 1)
+        seg_total_px = max(chart_w - n_breaks * _GAP_BREAK_PX, 10)
         needed_h = PAD_TOP + len(seen) * ROW_H + PAD_BOT
 
         # Expand drawing area to fit all rows.
         self._timeline.set_content_height(max(needed_h, 120))
+
+        # Lay out each segment in display space: (seg_start, seg_end, x0, w_px).
+        seg_layout: list[tuple[float, float, float, float]] = []
+        x_cursor = float(LABEL_W)
+        for seg_s, seg_e in segments:
+            seg_w_px = (seg_e - seg_s) / active_total * seg_total_px
+            seg_layout.append((seg_s, seg_e, x_cursor, seg_w_px))
+            x_cursor += seg_w_px + _GAP_BREAK_PX
 
         cr.select_font_face("monospace", 0, 0)
         cr.set_font_size(10)
@@ -313,53 +346,84 @@ class ProfilerView(Gtk.Box):
         cr.set_source_rgb(*c_bg)
         cr.paint()
 
-        # Alternating row backgrounds.
+        # Alternating row backgrounds and function labels.
         for fn, row in seen.items():
             y = PAD_TOP + row * ROW_H
             if row % 2 == 0:
                 cr.set_source_rgb(*c_row_alt)
                 cr.rectangle(0, y, width, ROW_H)
                 cr.fill()
-
-            # Function label (truncated).
             label = fn if len(fn) <= 23 else f"…{fn[-22:]}"
             cr.set_source_rgb(*c_text)
             cr.move_to(4, y + ROW_H - 5)
             cr.show_text(label)
 
-        # Event bars (skip those beyond the visible clip point).
-        for e in self._raw_events:
-            if e["start"] >= display_max_t:
-                continue
-            row = seen[e["function"]]
-            y = PAD_TOP + row * ROW_H + 3
-            x = LABEL_W + (e["start"] - min_t) / time_span * chart_w
-            dur = min(e["end"], display_max_t) - e["start"]
-            bar_w = max(dur / time_span * chart_w, 2.0)
-            r, g, b = _DEPTH_COLORS[e.get("depth", 0) % len(_DEPTH_COLORS)]
-            cr.set_source_rgba(r, g, b, 0.82)
-            cr.rectangle(x, y, bar_w, ROW_H - 6)
+        # Shade the collapsed-gap "break" columns.
+        for i in range(n_breaks):
+            _, _, x0_prev, w_prev = seg_layout[i]
+            break_x = x0_prev + w_prev
+            cr.set_source_rgb(*c_gap_bg)
+            cr.rectangle(break_x, PAD_TOP, _GAP_BREAK_PX, needed_h - PAD_TOP - PAD_BOT)
             cr.fill()
 
-        # Time axis ticks (5 evenly-spaced), relative to profiling start.
+        # Event bars — split across every segment they overlap.
+        for e in self._raw_events:
+            row = seen[e["function"]]
+            y = PAD_TOP + row * ROW_H + 3
+            r, g, b = _DEPTH_COLORS[e.get("depth", 0) % len(_DEPTH_COLORS)]
+            cr.set_source_rgba(r, g, b, 0.82)
+            for seg_s, seg_e, x0, w in seg_layout:
+                if e["end"] <= seg_s or e["start"] >= seg_e:
+                    continue
+                seg_dur = seg_e - seg_s
+                if seg_dur <= 0 or w <= 0:
+                    continue
+                piece_s = max(e["start"], seg_s)
+                piece_e = min(e["end"], seg_e)
+                x = x0 + (piece_s - seg_s) / seg_dur * w
+                bar_w = max((piece_e - piece_s) / seg_dur * w, 2.0)
+                cr.rectangle(x, y, bar_w, ROW_H - 6)
+                cr.fill()
+
+        # Segment-break visuals: two dashed verticals + gap-duration label.
+        cr.set_source_rgb(*c_tick)
+        cr.set_line_width(1.0)
+        for i in range(n_breaks):
+            _, prev_end, x0_prev, w_prev = seg_layout[i]
+            next_start = seg_layout[i + 1][0]
+            break_x = x0_prev + w_prev
+            cr.set_dash([3, 3])
+            for dx in (3, _GAP_BREAK_PX - 3):
+                cr.move_to(break_x + dx, PAD_TOP)
+                cr.line_to(break_x + dx, needed_h - PAD_BOT)
+                cr.stroke()
+            cr.set_dash([])
+            gap_label = self._format_gap(next_start - prev_end)
+            cr.set_font_size(9)
+            ext = cr.text_extents(gap_label)
+            cr.move_to(break_x + (_GAP_BREAK_PX - ext[2]) / 2, PAD_TOP - 4)
+            cr.show_text(gap_label)
+            cr.set_font_size(10)
+
+        # Time axis: per-segment start/end labels (relative to overall start).
+        t0 = segments[0][0]
         cr.set_source_rgb(*c_tick)
         cr.set_line_width(0.5)
-        for tick in range(5):
-            x = LABEL_W + tick / 4 * chart_w
-            cr.move_to(x, PAD_TOP - 1)
-            cr.line_to(x, needed_h - PAD_BOT)
-            cr.stroke()
-            t_ms = tick / 4 * time_span * 1000
-            cr.move_to(x + 2, PAD_TOP - 4)
-            cr.show_text(f"{t_ms:.1f}ms")
-
-        # Note about events hidden beyond the idle-gap clip point.
-        if hidden_count:
-            note = f"+ {hidden_count} call(s) hidden — idle gap > 2 s detected"
-            cr.set_font_size(9)
-            extents = cr.text_extents(note)
-            cr.move_to(LABEL_W + chart_w - extents[2] - 4, needed_h - 4)
-            cr.show_text(note)
+        for seg_s, seg_e, x0, w in seg_layout:
+            for frac, t_real in ((0.0, seg_s), (1.0, seg_e)):
+                x = x0 + frac * w
+                cr.move_to(x, PAD_TOP - 1)
+                cr.line_to(x, needed_h - PAD_BOT)
+                cr.stroke()
+                t_ms = (t_real - t0) * 1000.0
+                # Skip the end tick of one segment when the next starts very
+                # close on screen — only the gap-break draws between them.
+                label = f"{t_ms:.1f}ms"
+                ext = cr.text_extents(label)
+                # Right-align end labels so they don't overflow the segment.
+                lx = x + 2 if frac == 0.0 else x - ext[2] - 2
+                cr.move_to(lx, PAD_TOP - 4)
+                cr.show_text(label)
 
     # ── Signal handlers ────────────────────────────────────────────────────
 
@@ -528,8 +592,39 @@ class ProfilerView(Gtk.Box):
 
     def _flush_refresh(self) -> None:
         self._refresh_pending = False
+        self._recompute_self_times()
         self._store.splice(0, self._store.get_n_items(), list(self._stats.values()))
         self._timeline.queue_draw()
+
+    def _recompute_self_times(self) -> None:
+        """Aggregate per-function self-time = total minus direct children.
+
+        Uses a stack-based pass over events sorted by (start ASC, end DESC)
+        so that parents are visited before their children. Each event's
+        full duration is added to its own self bucket, then its parent's
+        bucket is decremented by that duration — leaving each event with
+        exclusive (non-callee) wall-clock time. Results are summed per
+        function name into ``FunctionStat.self_ms``.
+        """
+        for s in self._stats.values():
+            s.self_ms = 0.0
+        if not self._raw_events:
+            return
+        ordered = sorted(self._raw_events, key=lambda e: (e["start"], -e["end"]))
+        stack: list[dict[str, Any]] = []
+        event_self: dict[int, float] = {}
+        for e in ordered:
+            while stack and stack[-1]["end"] <= e["start"]:
+                stack.pop()
+            dur_ms = (e["end"] - e["start"]) * 1000.0
+            event_self[id(e)] = dur_ms
+            if stack:
+                event_self[id(stack[-1])] -= dur_ms
+            stack.append(e)
+        for e in ordered:
+            stat = self._stats.get(e["function"])
+            if stat is not None:
+                stat.self_ms += event_self[id(e)]
 
     def _clear_data(self) -> None:
         self._stats.clear()
