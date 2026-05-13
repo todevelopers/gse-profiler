@@ -236,6 +236,26 @@ class ProfilerView(Gtk.Box):
 
     # ── Timeline drawing ───────────────────────────────────────────────────
 
+    def _visible_range(self) -> tuple[float, float, int]:
+        """Return (min_t, display_max_t, hidden_count).
+
+        Clips after the first idle gap > 2 s so that short activity
+        bursts are not compressed into invisible slivers by long
+        background polling intervals.
+        """
+        if not self._raw_events:
+            return 0.0, 1.0, 0
+        ordered = sorted(self._raw_events, key=lambda e: e["start"])
+        min_t = ordered[0]["start"]
+        for i in range(1, len(ordered)):
+            gap = ordered[i]["start"] - ordered[i - 1]["end"]
+            if gap > 2.0:
+                clip_t = ordered[i - 1]["end"]
+                # +5 % padding so the last bar is not flush against the edge.
+                display_max_t = clip_t + max((clip_t - min_t) * 0.05, 0.001)
+                return min_t, display_max_t, len(ordered) - i
+        return min_t, ordered[-1]["end"], 0
+
     def _draw_timeline(
         self,
         _area: Gtk.DrawingArea,
@@ -265,9 +285,8 @@ class ProfilerView(Gtk.Box):
             cr.show_text(text)
             return
 
-        min_t = min(e["start"] for e in self._raw_events)
-        max_t = max(e["end"] for e in self._raw_events)
-        time_span = max_t - min_t or 1e-9
+        min_t, display_max_t, hidden_count = self._visible_range()
+        time_span = display_max_t - min_t or 1e-9
 
         # Unique function names in order of first appearance.
         seen: dict[str, int] = {}
@@ -279,7 +298,7 @@ class ProfilerView(Gtk.Box):
         LABEL_W = 160
         ROW_H = 22
         PAD_TOP = 18  # space for time axis labels
-        PAD_BOT = 4
+        PAD_BOT = 18 if hidden_count else 4
         chart_w = max(width - LABEL_W - 4, 1)
         needed_h = PAD_TOP + len(seen) * ROW_H + PAD_BOT
 
@@ -307,12 +326,15 @@ class ProfilerView(Gtk.Box):
             cr.move_to(4, y + ROW_H - 5)
             cr.show_text(label)
 
-        # Event bars.
+        # Event bars (skip those beyond the visible clip point).
         for e in self._raw_events:
+            if e["start"] >= display_max_t:
+                continue
             row = seen[e["function"]]
             y = PAD_TOP + row * ROW_H + 3
             x = LABEL_W + (e["start"] - min_t) / time_span * chart_w
-            bar_w = max((e["end"] - e["start"]) / time_span * chart_w, 2.0)
+            dur = min(e["end"], display_max_t) - e["start"]
+            bar_w = max(dur / time_span * chart_w, 2.0)
             r, g, b = _DEPTH_COLORS[e.get("depth", 0) % len(_DEPTH_COLORS)]
             cr.set_source_rgba(r, g, b, 0.82)
             cr.rectangle(x, y, bar_w, ROW_H - 6)
@@ -329,6 +351,14 @@ class ProfilerView(Gtk.Box):
             t_ms = tick / 4 * time_span * 1000
             cr.move_to(x + 2, PAD_TOP - 4)
             cr.show_text(f"{t_ms:.1f}ms")
+
+        # Note about events hidden beyond the idle-gap clip point.
+        if hidden_count:
+            note = f"+ {hidden_count} call(s) hidden — idle gap > 2 s detected"
+            cr.set_font_size(9)
+            extents = cr.text_extents(note)
+            cr.move_to(LABEL_W + chart_w - extents[2] - 4, needed_h - 4)
+            cr.show_text(note)
 
     # ── Signal handlers ────────────────────────────────────────────────────
 
