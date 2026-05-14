@@ -9,7 +9,7 @@ log filtering, object inspection — without leaving the desktop.
 
 ---
 
-## Features (V1)
+## Features
 
 | Feature               | Description                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------------ |
@@ -17,6 +17,13 @@ log filtering, object inspection — without leaving the desktop.
 | **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search        |
 | **Profiler**          | Live function timing via monkey-patching; load and visualize saved profile files           |
 | **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object |
+
+---
+
+## Gallery
+<img width="1523" height="770" alt="Screenshot From 2026-05-14 10-33-46" src="https://github.com/user-attachments/assets/5135c59e-5825-4e24-8712-8d3044d25f30" />
+<img width="1523" height="770" alt="Screenshot From 2026-05-14 10-34-42" src="https://github.com/user-attachments/assets/603caa7d-7b31-45f2-af2d-83ec6c1df2a9" />
+
 
 ---
 
