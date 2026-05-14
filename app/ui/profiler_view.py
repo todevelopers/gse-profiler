@@ -456,9 +456,19 @@ class ProfilerView(Gtk.Box):
         self._ext_dropdown.set_sensitive(True)
 
     def _on_save(self, _btn: Gtk.Button) -> None:
+        from datetime import datetime
+
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        uuid = self._selected_uuid()
+        if uuid:
+            short = uuid.split("@")[0]
+            filename = f"gse-profile_{short}_{ts}.json"
+        else:
+            filename = f"gse-profile_{ts}.json"
+
         dialog = Gtk.FileDialog()
         dialog.set_title("Save Profile")
-        dialog.set_initial_name("profile.json")
+        dialog.set_initial_name(filename)
         dialog.save(self.get_root(), None, self._on_save_response)
 
     def _on_save_response(
