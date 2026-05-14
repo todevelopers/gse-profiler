@@ -126,13 +126,13 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 5: Inspector
+## Phase 5: Inspector ✅
 
 **Goal:** Live access to extension `stateObj` properties and methods.
 
 ### Bridge side
 
-- [ ] `bridge-extension/inspector.js`
+- [x] `bridge-extension/inspector.js`
   - `inspect(uuid)` — get reference to extension's `stateObj`
   - Enumerate own properties + prototype chain (1 level)
   - Serialize: `{ name, type, value, writable }` — handle functions, circular refs, symbols
@@ -140,8 +140,8 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ### App side
 
-- [ ] Inspector UI
-  - `GtkTreeView` / `GtkColumnView`: property name | type | value
+- [x] Inspector UI
+  - `GtkColumnView`: property name | type | value
   - Expand row for object/array values (1-level deep in V1)
   - Refresh button
   - Copy property path / value to clipboard

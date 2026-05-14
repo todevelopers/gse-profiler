@@ -95,7 +95,7 @@ class MainWindow(Adw.ApplicationWindow):
             "extensions": ExtensionManagerView(self._dbus),
             "logs": LogViewerView(self._dbus),
             "profiler": ProfilerView(self._dbus, self._socket),
-            "inspector": InspectorView(),
+            "inspector": InspectorView(self._dbus, self._socket),
         }
 
         # ── Content stack ──────────────────────────────────────────────────

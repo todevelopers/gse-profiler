@@ -7,6 +7,7 @@ import GObject from 'gi://GObject';
 import St from 'gi://St';
 import { SocketClient } from './socket_client.js';
 import { Profiler } from './profiler.js';
+import { Inspector } from './inspector.js';
 
 const COMPANION_UUID = 'gse-profiler-bridge@todevelopers';
 
@@ -36,6 +37,9 @@ export default class GSEProfilerBridge extends Extension {
     /** @type {Profiler | null} */
     _profiler = null;
 
+    /** @type {Inspector | null} */
+    _inspector = null;
+
     enable() {
         log('[gse-profiler-bridge] Enabled');
 
@@ -45,6 +49,8 @@ export default class GSEProfilerBridge extends Extension {
         this._profiler = new Profiler(event => {
             this._socketClient?.send(event);
         });
+
+        this._inspector = new Inspector();
 
         this._socketClient = new SocketClient(COMPANION_UUID, msg => this._onMessage(msg));
         this._socketClient.connect();
@@ -57,6 +63,8 @@ export default class GSEProfilerBridge extends Extension {
             this._profiler.stopProfiling();
             this._profiler = null;
         }
+
+        this._inspector = null;
 
         if (this._socketClient) {
             this._socketClient.disconnect();
@@ -85,6 +93,18 @@ export default class GSEProfilerBridge extends Extension {
             this._profiler?.stopProfiling();
             this._socketClient?.send({ type: 'profiling_stopped' });
             break;
+        case 'inspect': {
+            log(`[gse-profiler-bridge] inspect: uuid=${msg.uuid}`);
+            const result = this._inspector?.inspect(msg.uuid) ?? { properties: [] };
+            this._socketClient?.send({ type: 'inspect_result', extensionUuid: msg.uuid, ...result });
+            break;
+        }
+        case 'set_property': {
+            log(`[gse-profiler-bridge] set_property: uuid=${msg.uuid} name=${msg.name}`);
+            const result = this._inspector?.setProperty(msg.uuid, msg.name, msg.value) ?? { ok: false };
+            this._socketClient?.send({ type: 'set_property_result', extensionUuid: msg.uuid, name: msg.name, ...result });
+            break;
+        }
         default:
             log(`[gse-profiler-bridge] unhandled message type: ${msg.type}`);
         }
