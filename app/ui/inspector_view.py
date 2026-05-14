@@ -224,8 +224,8 @@ class InspectorView(Gtk.Box):
 
         label.set_label(item.name)
 
-        # Drill button — only for depth-0 object/array items with children
-        drillable = item.depth == 0 and item.has_children
+        # Drill button — any depth-0 object/array (bridge resolves path fresh on demand)
+        drillable = item.depth == 0 and item.type_str in ("object", "array")
         drill_btn.set_visible(drillable)
 
         # Rebind expand handler

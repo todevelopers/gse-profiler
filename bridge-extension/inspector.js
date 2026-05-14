@@ -13,13 +13,9 @@ const _MAX_STRING_LEN = 200;
  */
 export class Inspector {
     /**
-     * Inspect the stateObj of the given extension.
-     * @param {string} uuid
-     * @returns {{ properties: object[] }}
-     */
-    /**
      * @param {string} uuid
      * @param {string[]} [path] - property key chain from stateObj to the object to inspect
+     * @returns {{ properties: object[] }}
      */
     inspect(uuid, path = []) {
         const ext = Main.extensionManager.lookup(uuid);
@@ -40,7 +36,11 @@ export class Inspector {
                 log(`[gse-profiler-bridge] inspector: resolved path is not an object`);
                 return { properties: [] };
             }
-            return { properties: _serializeObject(obj) };
+            // Arrays are serialized by index so the user sees elements, not prototype methods.
+            const properties = Array.isArray(obj)
+                ? _serializeArray(obj)
+                : _serializeObject(obj);
+            return { properties };
         } catch (e) {
             logError(e, '[gse-profiler-bridge] inspector.inspect');
             return { properties: [] };
@@ -101,23 +101,44 @@ function _serializeObject(obj) {
     return result;
 }
 
+/** Serialize an array as indexed properties so drilling into it shows its elements. */
+function _serializeArray(arr) {
+    const seen = new WeakSet();
+    seen.add(arr);
+    const result = [];
+    const limit = Math.min(arr.length, _MAX_CHILDREN);
+    for (let i = 0; i < limit; i++) {
+        try {
+            let [type, value, children] = _describeValue(arr[i], seen);
+            const item = { name: String(i), type, value, writable: true };
+            if (children) item.children = children;
+            result.push(item);
+        } catch (_) {
+            result.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
+        }
+    }
+    if (arr.length > _MAX_CHILDREN)
+        result.push({ name: '…', type: 'info', value: `${arr.length - _MAX_CHILDREN} more items`, writable: false });
+    return result;
+}
+
 function _serializeProp(name, desc, isOwn, holder, seen) {
     const writable = isOwn && (desc.writable === true || typeof desc.set === 'function');
     let type, value, children;
 
-    if (typeof desc.get === 'function') {
-        try {
+    try {
+        if (typeof desc.get === 'function') {
             const v = desc.get.call(holder);
             [type, value, children] = _describeValue(v, seen);
-        } catch (e) {
-            type = 'error';
-            value = `[getter error: ${e.message}]`;
+        } else {
+            [type, value, children] = _describeValue(desc.value, seen);
         }
-    } else {
-        [type, value, children] = _describeValue(desc.value, seen);
+    } catch (e) {
+        type = 'error';
+        value = `[serialization error: ${e.message}]`;
     }
 
-    const result = { name, type, value, writable };
+    const result = { name, type: type ?? 'error', value: value ?? '', writable };
     if (children) result.children = children;
     return result;
 }
@@ -143,8 +164,12 @@ function _describeValue(v, seen) {
         const children = [];
         const limit = Math.min(v.length, _MAX_CHILDREN);
         for (let i = 0; i < limit; i++) {
-            const [ct, cv] = _describeValue(v[i], seen);
-            children.push({ name: String(i), type: ct, value: String(cv), writable: true });
+            try {
+                const [ct, cv] = _describeValue(v[i], seen);
+                children.push({ name: String(i), type: ct, value: String(cv), writable: true });
+            } catch (_) {
+                children.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
+            }
         }
         if (v.length > _MAX_CHILDREN)
             children.push({ name: '…', type: 'info', value: `${v.length - _MAX_CHILDREN} more`, writable: false });
@@ -162,11 +187,16 @@ function _describeValue(v, seen) {
             const desc = _safeDescriptor(v, k);
             if (!desc) continue;
             let ct, cv;
-            if (typeof desc.get === 'function') {
-                ct = 'getter';
-                try { [, cv] = _describeValue(desc.get.call(v), seen); } catch (_) { cv = '[error]'; }
-            } else {
-                [ct, cv] = _describeValue(desc.value, seen);
+            try {
+                if (typeof desc.get === 'function') {
+                    ct = 'getter';
+                    [, cv] = _describeValue(desc.get.call(v), seen);
+                } else {
+                    [ct, cv] = _describeValue(desc.value, seen);
+                }
+            } catch (_) {
+                ct = 'error';
+                cv = '[serialization error]';
             }
             children.push({ name: k, type: ct, value: String(cv), writable: desc.writable ?? false });
         }
