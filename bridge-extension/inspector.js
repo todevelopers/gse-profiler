@@ -17,14 +17,30 @@ export class Inspector {
      * @param {string} uuid
      * @returns {{ properties: object[] }}
      */
-    inspect(uuid) {
+    /**
+     * @param {string} uuid
+     * @param {string[]} [path] - property key chain from stateObj to the object to inspect
+     */
+    inspect(uuid, path = []) {
         const ext = Main.extensionManager.lookup(uuid);
         if (!ext?.stateObj) {
             log(`[gse-profiler-bridge] inspector: no stateObj for ${uuid}`);
             return { properties: [] };
         }
         try {
-            return { properties: _serializeObject(ext.stateObj) };
+            let obj = ext.stateObj;
+            for (const key of path) {
+                if (obj == null || typeof obj !== 'object') {
+                    log(`[gse-profiler-bridge] inspector: path resolution failed at key "${key}"`);
+                    return { properties: [] };
+                }
+                obj = obj[key];
+            }
+            if (obj == null || typeof obj !== 'object') {
+                log(`[gse-profiler-bridge] inspector: resolved path is not an object`);
+                return { properties: [] };
+            }
+            return { properties: _serializeObject(obj) };
         } catch (e) {
             logError(e, '[gse-profiler-bridge] inspector.inspect');
             return { properties: [] };

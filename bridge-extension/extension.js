@@ -94,9 +94,10 @@ export default class GSEProfilerBridge extends Extension {
             this._socketClient?.send({ type: 'profiling_stopped' });
             break;
         case 'inspect': {
-            log(`[gse-profiler-bridge] inspect: uuid=${msg.uuid}`);
-            const result = this._inspector?.inspect(msg.uuid) ?? { properties: [] };
-            this._socketClient?.send({ type: 'inspect_result', extensionUuid: msg.uuid, ...result });
+            const path = msg.path ?? [];
+            log(`[gse-profiler-bridge] inspect: uuid=${msg.uuid} path=[${path.join(',')}]`);
+            const result = this._inspector?.inspect(msg.uuid, path) ?? { properties: [] };
+            this._socketClient?.send({ type: 'inspect_result', extensionUuid: msg.uuid, path, ...result });
             break;
         }
         case 'set_property': {

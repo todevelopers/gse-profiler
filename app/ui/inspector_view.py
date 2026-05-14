@@ -65,8 +65,10 @@ class InspectorView(Gtk.Box):
         self._current_uuid: str | None = None
         self._ext_uuids: list[str] = []
         self._store = Gio.ListStore(item_type=PropertyItem)
-        # handler IDs for expand buttons, keyed by id(button widget)
+        self._current_path: list[str] = []
+        # handler IDs for expand/drill buttons, keyed by id(button widget)
         self._expand_handlers: dict[int, int] = {}
+        self._drill_handlers: dict[int, int] = {}
 
         self._build_ui()
 
@@ -166,7 +168,20 @@ class InspectorView(Gtk.Box):
         self._stack.add_named(self._placeholder, "placeholder")
         self._stack.add_named(scrolled, "table")
 
+        # ── Breadcrumb bar ───────────────────────────────────────────────────
+        self._breadcrumb_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        self._breadcrumb_box.set_margin_start(6)
+        self._breadcrumb_box.set_margin_end(6)
+        self._breadcrumb_box.set_margin_top(2)
+        self._breadcrumb_box.set_margin_bottom(2)
+
+        self._breadcrumb_revealer = Gtk.Revealer()
+        self._breadcrumb_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self._breadcrumb_revealer.set_reveal_child(False)
+        self._breadcrumb_revealer.set_child(self._breadcrumb_box)
+
         self.append(toolbar)
+        self.append(self._breadcrumb_revealer)
         self.append(Gtk.Separator())
         self.append(self._stack)
 
@@ -182,8 +197,13 @@ class InspectorView(Gtk.Box):
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_hexpand(True)
         label.add_css_class("monospace")
+        drill_btn = Gtk.Button(icon_name="go-next-symbolic")
+        drill_btn.add_css_class("flat")
+        drill_btn.set_can_focus(False)
+        drill_btn.set_tooltip_text("Inspect subtree")
         box.append(expand_btn)
         box.append(label)
+        box.append(drill_btn)
         list_item.set_child(box)
 
     def _name_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
@@ -191,16 +211,24 @@ class InspectorView(Gtk.Box):
         box = list_item.get_child()
         expand_btn = box.get_first_child()
         label = expand_btn.get_next_sibling()
+        drill_btn = label.get_next_sibling()
 
         box.set_margin_start(item.depth * 24)
-        expand_btn.set_visible(item.has_children)
-        if item.has_children:
+
+        # Expand toggle — only for depth-0 items with children
+        expand_btn.set_visible(item.has_children and item.depth == 0)
+        if item.has_children and item.depth == 0:
             expand_btn.set_icon_name(
                 "pan-down-symbolic" if item.expanded else "pan-end-symbolic"
             )
 
         label.set_label(item.name)
 
+        # Drill button — only for depth-0 object/array items with children
+        drillable = item.depth == 0 and item.has_children
+        drill_btn.set_visible(drillable)
+
+        # Rebind expand handler
         btn_id = id(expand_btn)
         if btn_id in self._expand_handlers:
             expand_btn.disconnect(self._expand_handlers[btn_id])
@@ -208,17 +236,30 @@ class InspectorView(Gtk.Box):
             "clicked", self._on_expand_clicked, item
         )
 
+        # Rebind drill handler
+        d_id = id(drill_btn)
+        if d_id in self._drill_handlers:
+            drill_btn.disconnect(self._drill_handlers[d_id])
+        if drillable:
+            self._drill_handlers[d_id] = drill_btn.connect(
+                "clicked", self._on_drill_in, item
+            )
+
     def _name_unbind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         box = list_item.get_child()
         if not box:
             return
         expand_btn = box.get_first_child()
-        btn_id = id(expand_btn)
-        if btn_id in self._expand_handlers:
-            try:
-                expand_btn.disconnect(self._expand_handlers.pop(btn_id))
-            except Exception:
-                pass
+        label = expand_btn.get_next_sibling()
+        drill_btn = label.get_next_sibling()
+
+        for widget, store in ((expand_btn, self._expand_handlers), (drill_btn, self._drill_handlers)):
+            wid = id(widget)
+            if wid in store:
+                try:
+                    widget.disconnect(store.pop(wid))
+                except Exception:
+                    pass
 
     # ── Type column factory ────────────────────────────────────────────────
 
@@ -303,6 +344,64 @@ class InspectorView(Gtk.Box):
                 return i
         return None
 
+    # ── Drill-in / breadcrumb navigation ──────────────────────────────────
+
+    def _on_drill_in(self, _btn: Gtk.Button, item: PropertyItem) -> None:
+        self._navigate_to(self._current_path + [item.name])
+
+    def _navigate_to(self, path: list[str]) -> None:
+        self._current_path = path
+        self._update_breadcrumb()
+        uuid = self._current_uuid or self._selected_uuid()
+        if uuid:
+            self._current_uuid = uuid
+            self._socket.send({"type": "inspect", "uuid": uuid, "path": path})
+            self._status_lbl.set_label("Loading…")
+
+    def _on_back(self, _btn: Gtk.Button) -> None:
+        self._navigate_to(self._current_path[:-1])
+
+    def _update_breadcrumb(self) -> None:
+        # Clear existing breadcrumb widgets
+        child = self._breadcrumb_box.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self._breadcrumb_box.remove(child)
+            child = nxt
+
+        if not self._current_path:
+            self._breadcrumb_revealer.set_reveal_child(False)
+            return
+
+        self._breadcrumb_revealer.set_reveal_child(True)
+
+        # Back button
+        back_btn = Gtk.Button(icon_name="go-previous-symbolic")
+        back_btn.add_css_class("flat")
+        back_btn.set_tooltip_text("Go up one level")
+        back_btn.connect("clicked", self._on_back)
+        self._breadcrumb_box.append(back_btn)
+
+        # Segments: "stateObj › _fetcher › _client"
+        segments = ["stateObj"] + self._current_path
+        for i, seg in enumerate(segments):
+            if i > 0:
+                sep = Gtk.Label(label=" › ")
+                sep.add_css_class("dim-label")
+                self._breadcrumb_box.append(sep)
+            if i < len(segments) - 1:
+                target = self._current_path[:i]
+                btn = Gtk.Button(label=seg)
+                btn.add_css_class("flat")
+                btn.add_css_class("monospace")
+                btn.connect("clicked", lambda _b, p=target: self._navigate_to(p))
+                self._breadcrumb_box.append(btn)
+            else:
+                lbl = Gtk.Label(label=seg)
+                lbl.add_css_class("monospace")
+                lbl.add_css_class("heading")
+                self._breadcrumb_box.append(lbl)
+
     # ── Toolbar actions ────────────────────────────────────────────────────
 
     def _on_refresh(self, _btn: object) -> None:
@@ -310,7 +409,7 @@ class InspectorView(Gtk.Box):
         if not uuid:
             return
         self._current_uuid = uuid
-        self._socket.send({"type": "inspect", "uuid": uuid})
+        self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
         self._status_lbl.set_label("Refreshing…")
 
     def _on_copy(self, _btn: Gtk.Button) -> None:
@@ -388,6 +487,8 @@ class InspectorView(Gtk.Box):
     def _on_inspect_result(self, msg: dict[str, Any]) -> None:
         if msg.get("extensionUuid") != self._current_uuid:
             return
+        if msg.get("path", []) != self._current_path:
+            return  # stale response from a previous navigation
         properties: list[dict[str, Any]] = msg.get("properties", [])
 
         items: list[PropertyItem] = []
@@ -420,7 +521,7 @@ class InspectorView(Gtk.Box):
 
     def _on_set_property_result(self, msg: dict[str, Any]) -> None:
         if msg.get("ok"):
-            self._on_refresh(None)
+            self._navigate_to(self._current_path)
         else:
             _log.warning(
                 "set_property failed for %s: %s",
@@ -434,7 +535,8 @@ class InspectorView(Gtk.Box):
     # ── Extension dropdown ─────────────────────────────────────────────────
 
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict[str, Any]) -> None:
-        selected = self._selected_uuid()
+        prev_selected = self._selected_uuid()
+        selected = prev_selected
         self._ext_uuids = [
             u for u in extensions
             if u != _BRIDGE_UUID and extensions[u].get("state") == ExtensionState.ENABLED
@@ -447,6 +549,10 @@ class InspectorView(Gtk.Box):
 
         if selected and selected in self._ext_uuids:
             self._ext_dropdown.set_selected(self._ext_uuids.index(selected))
+        else:
+            # Extension selection changed — reset navigation path
+            self._current_path = []
+            self._update_breadcrumb()
 
     def _selected_uuid(self) -> str | None:
         idx = self._ext_dropdown.get_selected()
