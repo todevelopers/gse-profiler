@@ -9,9 +9,9 @@ import gi
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GLib, GObject, Gtk
+from gi.repository import Gio, GLib, Gtk
 
-from app.core.dbus_client import DBusClient, ExtensionState
+from app.core.dbus_client import DBusClient
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
 
 _log = logging.getLogger(__name__)
@@ -84,11 +84,11 @@ class LogViewerView(Gtk.Box):
 
         # Filter state
         self._uuid_filter: str | None = None
-        self._ext_uuids: list[str] = []
+        self._selected_uuid: str | None = None
+        self._filter_selected = False
         self._level_threshold: int | None = None
         self._search_text = ""
         self._auto_scroll = True
-        self._skip_filter_update = False
         self._is_running = False
 
         settings = _load_settings()
@@ -98,7 +98,6 @@ class LogViewerView(Gtk.Box):
         self._build_ui()
         self._setup_tags()
 
-        dbus_client.connect("extensions-changed", self._on_extensions_changed)
         self._reader.connect("log-entry", self._on_log_entry)
         self.connect("destroy", lambda _w: self._reader.stop())
 
@@ -135,12 +134,13 @@ class LogViewerView(Gtk.Box):
         cmd_bar.append(self._start_stop_btn)
 
         # ── Filter bar ──────────────────────────────────────────────────────
-        self._uuid_list = Gtk.StringList.new(["All Extensions"])
-        self._uuid_dropdown = Gtk.DropDown.new(self._uuid_list, None)
-        self._uuid_dropdown.set_tooltip_text("Filter by extension UUID")
-        self._uuid_handler = self._uuid_dropdown.connect(
-            "notify::selected", self._on_uuid_changed
+        self._filter_selected_btn = Gtk.ToggleButton(label="Selected")
+        self._filter_selected_btn.set_icon_name("application-x-addon-symbolic")
+        self._filter_selected_btn.set_tooltip_text(
+            "Show logs for the selected extension only"
         )
+        self._filter_selected_btn.set_active(False)
+        self._filter_selected_btn.connect("toggled", self._on_filter_selected_toggled)
 
         level_list = Gtk.StringList.new(_LEVEL_NAMES)
         self._level_dropdown = Gtk.DropDown.new(level_list, None)
@@ -178,7 +178,7 @@ class LogViewerView(Gtk.Box):
         filter_bar.set_margin_end(6)
         filter_bar.set_margin_top(0)
         filter_bar.set_margin_bottom(6)
-        filter_bar.append(self._uuid_dropdown)
+        filter_bar.append(self._filter_selected_btn)
         filter_bar.append(self._level_dropdown)
         filter_bar.append(self._search_entry)
         filter_bar.append(self._auto_scroll_btn)
@@ -255,35 +255,20 @@ class LogViewerView(Gtk.Box):
         self._start_stop_btn.set_tooltip_text("Start reading the journal")
         self._cmd_entry.set_sensitive(True)
 
+    # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_selected_extension(self, uuid: str | None) -> None:
+        """Update the currently selected extension for the 'Selected' filter."""
+        self._selected_uuid = uuid
+        if self._filter_selected:
+            self._uuid_filter = uuid
+            self._rebuild_buffer()
+
     # ── Signal handlers — filters ──────────────────────────────────────────
 
-    def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict) -> None:
-        self._skip_filter_update = True
-        current_uuid = self._uuid_filter
-        uuids = sorted(
-            u for u in extensions if extensions[u].get("state") == ExtensionState.ENABLED
-        )
-        names = [extensions[u].get("name") or u for u in uuids]
-        self._ext_uuids = uuids
-        items = ["All Extensions"] + names
-        self._uuid_list.splice(0, self._uuid_list.get_n_items(), items)
-        if current_uuid and current_uuid in self._ext_uuids:
-            self._uuid_dropdown.set_selected(self._ext_uuids.index(current_uuid) + 1)
-        else:
-            self._uuid_dropdown.set_selected(0)
-            self._uuid_filter = None
-        self._skip_filter_update = False
-        self._rebuild_buffer()
-
-    def _on_uuid_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:
-        if self._skip_filter_update:
-            return
-        idx = dropdown.get_selected()
-        if idx == 0 or idx == Gtk.INVALID_LIST_POSITION:
-            self._uuid_filter = None
-        else:
-            uuid_idx = idx - 1
-            self._uuid_filter = self._ext_uuids[uuid_idx] if 0 <= uuid_idx < len(self._ext_uuids) else None
+    def _on_filter_selected_toggled(self, btn: Gtk.ToggleButton) -> None:
+        self._filter_selected = btn.get_active()
+        self._uuid_filter = self._selected_uuid if self._filter_selected else None
         self._rebuild_buffer()
 
     def _on_level_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:

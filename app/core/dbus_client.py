@@ -135,6 +135,10 @@ class DBusClient(GObject.Object):
         """
         self._call_toggle("DisableExtension", uuid, on_done)
 
+    def get_extensions(self) -> "dict[str, Any]":
+        """Return a snapshot of the currently cached extension dict."""
+        return dict(self._extensions)
+
     def is_extension_known(self, uuid: str) -> bool:
         """Return True if gnome-shell has this extension in its registry."""
         return uuid in self._extensions
@@ -143,6 +147,20 @@ class DBusClient(GObject.Object):
         """Return cached extension state, or None if unknown."""
         info = self._extensions.get(uuid)
         return int(info["state"]) if info else None
+
+    def launch_extension_prefs(self, uuid: str) -> None:
+        """Open the extension preferences dialog via D-Bus."""
+        if self._proxy is None:
+            return
+        self._proxy.call(
+            "LaunchExtensionPrefs",
+            GLib.Variant("(s)", (uuid,)),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            None,
+            None,
+            None,
+        )
 
     # ── Private helpers ───────────────────────────────────────────────────
 
@@ -218,4 +236,6 @@ def _parse_info(uuid: str, info: dict) -> dict[str, Any]:
         "path": str(info.get("path", "")),
         "error": str(info.get("error", "")),
         "url": str(info.get("url", "")),
+        "type": int(info.get("type", 2)),
+        "hasPrefs": bool(info.get("hasPrefs", False)),
     }

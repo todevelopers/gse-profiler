@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -16,20 +17,14 @@ from gi.repository import Adw, Gio, GLib, Gtk
 from app.core.bridge_manager import BRIDGE_UUID, BridgeManager
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
-from app.ui.extension_manager import ExtensionManagerView
+from app.ui.details_view import DetailsView
+from app.ui.extension_list import ExtensionListView
 from app.ui.inspector_view import InspectorView
 from app.ui.log_viewer import LogViewerView
 from app.ui.profiler_view import ProfilerView
 
 APP_ID = "org.gnome.GSEProfiler"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-_NAV_ITEMS: list[tuple[str, str, str]] = [
-    ("extensions", "Extensions", "application-x-addon-symbolic"),
-    ("logs", "Log Viewer", "folder-open-symbolic"),
-    ("profiler", "Profiler", "power-profile-performance-symbolic"),
-    ("inspector", "Inspector", "edit-find-symbolic"),
-]
 
 
 class _ConnectionChip(Gtk.Label):
@@ -62,14 +57,16 @@ class MainWindow(Adw.ApplicationWindow):
         self._dbus = dbus_client
         self._socket = socket_server
         self._bridge = bridge
+        self._active_uuid: str | None = None
+        self._last_extensions: dict[str, Any] = {}
         self.set_title("GSE Profiler")
-        self.set_default_size(1100, 720)
+        self.set_default_size(1200, 760)
         self._register_actions()
         self._build_ui()
         self._update_bridge_actions()
         socket_server.connect("client-connected", self._on_client_connected)
         socket_server.connect("client-disconnected", self._on_client_disconnected)
-        dbus_client.connect("extensions-changed", self._on_extensions_changed_for_actions)
+        dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
     def _register_actions(self) -> None:
         self._install_action = Gio.SimpleAction.new("install-bridge", None)
@@ -91,43 +88,50 @@ class MainWindow(Adw.ApplicationWindow):
         self._uninstall_action.set_enabled(installed)
 
     def _build_ui(self) -> None:
-        views: dict[str, Gtk.Widget] = {
-            "extensions": ExtensionManagerView(self._dbus),
-            "logs": LogViewerView(self._dbus),
-            "profiler": ProfilerView(self._dbus, self._socket),
-            "inspector": InspectorView(self._dbus, self._socket),
-        }
+        # ── Content views ──────────────────────────────────────────────────
+        self._details_view = DetailsView(self._dbus)
+        self._profiler_view = ProfilerView(self._dbus, self._socket)
+        self._inspector_view = InspectorView(self._dbus, self._socket)
+        self._logs_view = LogViewerView(self._dbus)
 
-        # ── Content stack ──────────────────────────────────────────────────
-        self._stack = Gtk.Stack()
-        self._stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
-        for key, view in views.items():
-            self._stack.add_named(view, key)
+        # ── ViewStack (tabs) ───────────────────────────────────────────────
+        self._view_stack = Adw.ViewStack()
 
-        self._page_title = Gtk.Label(label="Extensions")
-        self._page_title.add_css_class("title")
+        details_page = self._view_stack.add_titled(self._details_view, "details", "Details")
+        details_page.set_icon_name("dialog-information-symbolic")
+
+        self._profiler_page = self._view_stack.add_titled(
+            self._profiler_view, "profiler", "Profiler"
+        )
+        self._profiler_page.set_icon_name("power-profile-performance-symbolic")
+
+        self._inspector_page = self._view_stack.add_titled(
+            self._inspector_view, "inspector", "Inspector"
+        )
+        self._inspector_page.set_icon_name("edit-find-symbolic")
+
+        logs_page = self._view_stack.add_titled(self._logs_view, "logs", "Logs")
+        logs_page.set_icon_name("folder-open-symbolic")
+
+        switcher = Adw.ViewSwitcher()
+        switcher.set_stack(self._view_stack)
+        switcher.set_policy(Adw.ViewSwitcherPolicy.WIDE)
 
         content_header = Adw.HeaderBar()
-        content_header.set_title_widget(self._page_title)
-        content_header.set_show_start_title_buttons(False)
+        content_header.set_title_widget(switcher)
 
-        content_view = Adw.ToolbarView()
-        content_view.add_top_bar(content_header)
-        content_view.set_content(self._stack)
+        content_toolbar = Adw.ToolbarView()
+        content_toolbar.add_top_bar(content_header)
+        content_toolbar.set_content(self._view_stack)
 
-        # ── Sidebar navigation ─────────────────────────────────────────────
-        nav_list = Gtk.ListBox()
-        nav_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        nav_list.add_css_class("navigation-sidebar")
-        nav_list.connect("row-selected", self._on_row_selected)
+        content_page = Adw.NavigationPage()
+        content_page.set_title("GSE Profiler")
+        content_page.set_child(content_toolbar)
 
-        for _key, title, icon in _NAV_ITEMS:
-            row = Adw.ActionRow()
-            row.set_title(title)
-            row.add_prefix(Gtk.Image.new_from_icon_name(icon))
-            nav_list.append(row)
+        # ── Sidebar (extension list) ───────────────────────────────────────
+        self._ext_list = ExtensionListView(self._dbus)
+        self._ext_list.connect("extension-activated", self._on_extension_activated)
 
-        # App menu
         menu = Gio.Menu()
         section = Gio.Menu()
         section.append("Install Bridge", "win.install-bridge")
@@ -140,7 +144,6 @@ class MainWindow(Adw.ApplicationWindow):
         menu_btn.set_tooltip_text("Application menu")
         menu_btn.set_menu_model(menu)
 
-        # Connection status chip
         self._conn_chip = _ConnectionChip()
 
         sidebar_header = Adw.HeaderBar()
@@ -148,34 +151,70 @@ class MainWindow(Adw.ApplicationWindow):
         sidebar_header.pack_end(menu_btn)
         sidebar_header.pack_end(self._conn_chip)
 
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_vexpand(True)
-        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_child(nav_list)
+        sidebar_toolbar = Adw.ToolbarView()
+        sidebar_toolbar.add_top_bar(sidebar_header)
+        sidebar_toolbar.set_content(self._ext_list)
 
-        sidebar_view = Adw.ToolbarView()
-        sidebar_view.add_top_bar(sidebar_header)
-        sidebar_view.set_content(scrolled)
+        sidebar_page = Adw.NavigationPage()
+        sidebar_page.set_title("Extensions")
+        sidebar_page.set_child(sidebar_toolbar)
 
         # ── Split view ─────────────────────────────────────────────────────
-        split = Adw.OverlaySplitView()
-        split.set_sidebar_position(Gtk.PackType.START)
-        split.set_sidebar(sidebar_view)
-        split.set_content(content_view)
-        split.set_collapsed(False)
+        split = Adw.NavigationSplitView()
+        split.set_sidebar(sidebar_page)
+        split.set_content(content_page)
 
         self.set_content(split)
-        self._nav_list = nav_list
 
-        nav_list.select_row(nav_list.get_row_at_index(0))
+    # ── Extension selection ────────────────────────────────────────────────
 
-    def _on_row_selected(self, _list: Gtk.ListBox, row: Gtk.ListBoxRow | None) -> None:
-        if row is None:
-            return
-        idx = row.get_index()
-        key, title, _ = _NAV_ITEMS[idx]
-        self._stack.set_visible_child_name(key)
-        self._page_title.set_label(title)
+    def _on_extension_activated(
+        self, _list: ExtensionListView, uuid: str
+    ) -> None:
+        self._active_uuid = uuid
+        info = self._last_extensions.get(uuid, {})
+        enabled = info.get("state") == ExtensionState.ENABLED
+
+        self._details_view.set_active_extension(uuid)
+        self._profiler_view.set_target_extension(uuid)
+        self._inspector_view.set_target_extension(uuid)
+        self._logs_view.set_selected_extension(uuid)
+
+        self._profiler_page.set_enabled(enabled)
+        self._inspector_page.set_enabled(enabled)
+
+        if not enabled:
+            visible = self._view_stack.get_visible_child_name()
+            if visible in ("profiler", "inspector"):
+                self._view_stack.set_visible_child_name("details")
+
+    # ── D-Bus / socket handlers ────────────────────────────────────────────
+
+    def _on_extensions_changed(
+        self, _dbus: DBusClient, extensions: dict[str, Any]
+    ) -> None:
+        self._last_extensions = extensions
+        self._update_bridge_actions()
+
+        if self._active_uuid:
+            if self._active_uuid in extensions:
+                info = extensions[self._active_uuid]
+                enabled = info.get("state") == ExtensionState.ENABLED
+                self._profiler_page.set_enabled(enabled)
+                self._inspector_page.set_enabled(enabled)
+                if not enabled:
+                    visible = self._view_stack.get_visible_child_name()
+                    if visible in ("profiler", "inspector"):
+                        self._view_stack.set_visible_child_name("details")
+            else:
+                # Extension was removed
+                self._active_uuid = None
+                self._profiler_page.set_enabled(True)
+                self._inspector_page.set_enabled(True)
+                self._details_view.set_active_extension(None)
+                self._profiler_view.set_target_extension(None)
+                self._inspector_view.set_target_extension(None)
+                self._logs_view.set_selected_extension(None)
 
     def _on_client_connected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(True)
@@ -183,8 +222,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(False)
 
-    def _on_extensions_changed_for_actions(self, _dbus: DBusClient, _extensions: dict) -> None:
-        self._update_bridge_actions()
+    # ── Bridge actions ─────────────────────────────────────────────────────
 
     def _on_install_bridge(self, _action: Gio.SimpleAction, _param: object) -> None:
         self._bridge.install(parent_window=self)
@@ -218,8 +256,6 @@ class Application(Adw.Application):
             bridge=self._bridge,
         )
         self._win.present()
-        # Bootstrap after proxy is ready — first extensions-changed fires once the
-        # D-Bus proxy has connected and fetched the extension list.
         self._bootstrap_handler = self._dbus_client.connect(
             "extensions-changed", self._on_ready_for_bootstrap
         )

@@ -11,13 +11,10 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
-from app.core.dbus_client import DBusClient, ExtensionState
+from app.core.dbus_client import DBusClient
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
-
-# Bridge UUID excluded from the target dropdown.
-_BRIDGE_UUID = "gse-profiler-bridge@todevelopers"
 
 # Bar colours per call depth (RGB, cycled).
 _DEPTH_COLORS: list[tuple[float, float, float]] = [
@@ -59,38 +56,30 @@ class FunctionStat(GObject.Object):
 
 
 class ProfilerView(Gtk.Box):
-    """Live function timing profiler — Phase 4."""
+    """Live function timing profiler."""
 
     def __init__(self, dbus_client: DBusClient, socket_server: SocketServer) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
-        self._dbus = dbus_client
         self._socket = socket_server
         self._profiling = False
         self._refresh_pending = False
+        self._target_uuid: str | None = None
 
         # Data model
         self._stats: dict[str, FunctionStat] = {}
         self._raw_events: list[dict[str, Any]] = []
-        self._ext_uuids: list[str] = []
 
         self._store = Gio.ListStore(item_type=FunctionStat)
         self._build_ui()
 
         socket_server.connect("message-received", self._on_message)
         socket_server.connect("client-disconnected", self._on_client_disconnected)
-        dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
     # ── UI construction ────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
         # ── Toolbar ────────────────────────────────────────────────────────
-        self._ext_dropdown = Gtk.DropDown()
-        self._ext_dropdown.set_tooltip_text("Target extension to profile")
-        self._ext_string_list = Gtk.StringList.new([])
-        self._ext_dropdown.set_model(self._ext_string_list)
-        self._ext_dropdown.set_hexpand(False)
-
-        self._start_btn = Gtk.Button(label="Start")
+        self._start_btn = Gtk.Button(label="Start profiling")
         self._start_btn.set_tooltip_text("Start profiling selected extension")
         self._start_btn.add_css_class("suggested-action")
         self._start_btn.connect("clicked", self._on_start)
@@ -125,7 +114,6 @@ class ProfilerView(Gtk.Box):
         toolbar.set_margin_end(6)
         toolbar.set_margin_top(6)
         toolbar.set_margin_bottom(6)
-        toolbar.append(self._ext_dropdown)
         toolbar.append(self._start_btn)
         toolbar.append(self._stop_btn)
         toolbar.append(sep)
@@ -427,22 +415,28 @@ class ProfilerView(Gtk.Box):
 
     # ── Signal handlers ────────────────────────────────────────────────────
 
+    # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_target_extension(self, uuid: str | None) -> None:
+        """Set the extension to profile. Stops ongoing profiling if UUID changes."""
+        if self._profiling and uuid != self._target_uuid:
+            self._socket.send({"type": "stop_profiling"})
+            self._set_stopped()
+        self._target_uuid = uuid
+        self._start_btn.set_sensitive(uuid is not None and not self._profiling)
+
+    # ── Button handlers ────────────────────────────────────────────────────
+
     def _on_start(self, _btn: Gtk.Button) -> None:
-        uuid = self._selected_uuid()
-        _log.debug(
-            "Start clicked — uuid=%r connected=%s ext_count=%d",
-            uuid,
-            self._socket.is_client_connected,
-            len(self._ext_uuids),
-        )
+        uuid = self._target_uuid
+        _log.debug("Start clicked — uuid=%r connected=%s", uuid, self._socket.is_client_connected)
         if not uuid:
-            _log.warning("Start clicked but no extension selected (ext_uuids=%r)", self._ext_uuids)
+            _log.warning("Start clicked but no target extension set")
             return
         self._socket.send({"type": "start_profiling", "uuid": uuid})
         self._profiling = True
         self._start_btn.set_sensitive(False)
         self._stop_btn.set_sensitive(True)
-        self._ext_dropdown.set_sensitive(False)
 
     def _on_stop(self, _btn: Gtk.Button) -> None:
         _log.debug("Stop clicked")
@@ -451,17 +445,15 @@ class ProfilerView(Gtk.Box):
 
     def _set_stopped(self) -> None:
         self._profiling = False
-        self._start_btn.set_sensitive(True)
+        self._start_btn.set_sensitive(self._target_uuid is not None)
         self._stop_btn.set_sensitive(False)
-        self._ext_dropdown.set_sensitive(True)
 
     def _on_save(self, _btn: Gtk.Button) -> None:
         from datetime import datetime
 
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        uuid = self._selected_uuid()
-        if uuid:
-            short = uuid.split("@")[0]
+        if self._target_uuid:
+            short = self._target_uuid.split("@")[0]
             filename = f"gse-profile_{short}_{ts}.json"
         else:
             filename = f"gse-profile_{ts}.json"
@@ -555,24 +547,6 @@ class ProfilerView(Gtk.Box):
         if self._profiling:
             self._set_stopped()
 
-    def _on_extensions_changed(
-        self, _dbus: DBusClient, extensions: dict[str, Any]
-    ) -> None:
-        selected = self._selected_uuid()
-        self._ext_uuids = [
-            u for u in extensions
-            if u != _BRIDGE_UUID and extensions[u].get("state") == ExtensionState.ENABLED
-        ]
-        names = [extensions[u].get("name") or u for u in self._ext_uuids]
-        _log.debug("extensions_changed: %d available for profiling: %r", len(self._ext_uuids), self._ext_uuids)
-
-        new_list = Gtk.StringList.new(names)
-        self._ext_dropdown.set_model(new_list)
-        self._ext_string_list = new_list
-
-        if selected and selected in self._ext_uuids:
-            self._ext_dropdown.set_selected(self._ext_uuids.index(selected))
-
     # ── Data management ────────────────────────────────────────────────────
 
     def _ingest_event(
@@ -653,9 +627,3 @@ class ProfilerView(Gtk.Box):
     def _clear_data(self) -> None:
         self._stats.clear()
         self._raw_events.clear()
-
-    def _selected_uuid(self) -> str | None:
-        idx = self._ext_dropdown.get_selected()
-        if 0 <= idx < len(self._ext_uuids):
-            return str(self._ext_uuids[idx])
-        return None

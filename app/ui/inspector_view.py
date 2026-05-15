@@ -11,12 +11,11 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
-from app.core.dbus_client import DBusClient, ExtensionState
+from app.core.dbus_client import DBusClient
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
 
-_BRIDGE_UUID = "gse-profiler-bridge@todevelopers"
 _INVALID_POS = GLib.MAXUINT
 
 _TYPE_CSS: dict[str, str] = {
@@ -63,7 +62,6 @@ class InspectorView(Gtk.Box):
         self._dbus = dbus_client
         self._socket = socket_server
         self._current_uuid: str | None = None
-        self._ext_uuids: list[str] = []
         self._store = Gio.ListStore(item_type=PropertyItem)
         self._current_path: list[str] = []
         # handler IDs for expand/drill buttons, keyed by id(button widget)
@@ -74,7 +72,6 @@ class InspectorView(Gtk.Box):
 
         socket_server.connect("message-received", self._on_message)
         socket_server.connect("client-disconnected", self._on_disconnected)
-        dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
     # ── UI construction ────────────────────────────────────────────────────
 
@@ -85,11 +82,6 @@ class InspectorView(Gtk.Box):
         toolbar.set_margin_end(6)
         toolbar.set_margin_top(6)
         toolbar.set_margin_bottom(6)
-
-        self._ext_string_list = Gtk.StringList.new([])
-        self._ext_dropdown = Gtk.DropDown(model=self._ext_string_list)
-        self._ext_dropdown.set_tooltip_text("Target extension to inspect")
-        self._ext_dropdown.set_hexpand(False)
 
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         refresh_btn.set_tooltip_text("Refresh properties")
@@ -105,7 +97,6 @@ class InspectorView(Gtk.Box):
         self._status_lbl.set_halign(Gtk.Align.END)
         self._status_lbl.add_css_class("dim-label")
 
-        toolbar.append(self._ext_dropdown)
         toolbar.append(refresh_btn)
         toolbar.append(self._copy_btn)
         toolbar.append(self._status_lbl)
@@ -352,10 +343,8 @@ class InspectorView(Gtk.Box):
     def _navigate_to(self, path: list[str]) -> None:
         self._current_path = path
         self._update_breadcrumb()
-        uuid = self._current_uuid or self._selected_uuid()
-        if uuid:
-            self._current_uuid = uuid
-            self._socket.send({"type": "inspect", "uuid": uuid, "path": path})
+        if self._current_uuid:
+            self._socket.send({"type": "inspect", "uuid": self._current_uuid, "path": path})
             self._status_lbl.set_label("Loading…")
 
     def _on_back(self, _btn: Gtk.Button) -> None:
@@ -402,13 +391,24 @@ class InspectorView(Gtk.Box):
                 lbl.add_css_class("heading")
                 self._breadcrumb_box.append(lbl)
 
+    # ── Public API ─────────────────────────────────────────────────────────
+
+    def set_target_extension(self, uuid: str | None) -> None:
+        """Set the extension to inspect. Resets the navigation path."""
+        if uuid != self._current_uuid:
+            self._current_uuid = uuid
+            self._current_path = []
+            self._update_breadcrumb()
+            self._store.splice(0, self._store.get_n_items(), [])
+            self._stack.set_visible_child_name("placeholder")
+            self._status_lbl.set_label("")
+
     # ── Toolbar actions ────────────────────────────────────────────────────
 
     def _on_refresh(self, _btn: object) -> None:
-        uuid = self._selected_uuid()
+        uuid = self._current_uuid
         if not uuid:
             return
-        self._current_uuid = uuid
         self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
         self._status_lbl.set_label("Refreshing…")
 
@@ -531,31 +531,3 @@ class InspectorView(Gtk.Box):
 
     def _on_disconnected(self, _server: SocketServer) -> None:
         self._status_lbl.set_label("Disconnected")
-
-    # ── Extension dropdown ─────────────────────────────────────────────────
-
-    def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict[str, Any]) -> None:
-        prev_selected = self._selected_uuid()
-        selected = prev_selected
-        self._ext_uuids = [
-            u for u in extensions
-            if u != _BRIDGE_UUID and extensions[u].get("state") == ExtensionState.ENABLED
-        ]
-        names = [extensions[u].get("name") or u for u in self._ext_uuids]
-
-        new_list = Gtk.StringList.new(names)
-        self._ext_dropdown.set_model(new_list)
-        self._ext_string_list = new_list
-
-        if selected and selected in self._ext_uuids:
-            self._ext_dropdown.set_selected(self._ext_uuids.index(selected))
-        else:
-            # Extension selection changed — reset navigation path
-            self._current_path = []
-            self._update_breadcrumb()
-
-    def _selected_uuid(self) -> str | None:
-        idx = self._ext_dropdown.get_selected()
-        if idx == _INVALID_POS or idx >= len(self._ext_uuids):
-            return None
-        return self._ext_uuids[idx]
