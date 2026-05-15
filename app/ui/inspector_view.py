@@ -11,7 +11,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
-from app.core.dbus_client import DBusClient
+from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ class InspectorView(Gtk.Stack):
         socket_server.connect("message-received", self._on_message)
         socket_server.connect("client-connected", self._on_client_connected)
         socket_server.connect("client-disconnected", self._on_disconnected)
+        dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
     # ── UI construction ────────────────────────────────────────────────────
 
@@ -82,6 +83,12 @@ class InspectorView(Gtk.Stack):
         no_selection.set_title("No Extension Selected")
         no_selection.set_description("Select an enabled extension from the list to inspect its state object.")
         self.add_named(no_selection, "no-selection")
+
+        disabled = Adw.StatusPage()
+        disabled.set_icon_name("action-unavailable-symbolic")
+        disabled.set_title("Extension Disabled")
+        disabled.set_description("Enable the extension to inspect its state object.")
+        self.add_named(disabled, "disabled")
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add_named(content, "content")
@@ -413,10 +420,27 @@ class InspectorView(Gtk.Stack):
             self._store.splice(0, self._store.get_n_items(), [])
             self._stack.set_visible_child_name("placeholder")
             self._status_lbl.set_label("")
-        self.set_visible_child_name("content" if uuid else "no-selection")
-        if uuid and self._socket.is_client_connected:
+        self._update_visible_child()
+
+    def _update_visible_child(self) -> None:
+        uuid = self._current_uuid
+        prev = self.get_visible_child_name()
+        if uuid is None:
+            self.set_visible_child_name("no-selection")
+            return
+        if self._dbus.get_extension_state(uuid) != ExtensionState.ENABLED:
+            self.set_visible_child_name("disabled")
+            return
+        self.set_visible_child_name("content")
+        if prev != "content" and self._socket.is_client_connected:
             self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
             self._status_lbl.set_label("Loading…")
+
+    def _on_extensions_changed(
+        self, _dbus: DBusClient, _extensions: dict[str, Any]
+    ) -> None:
+        if self._current_uuid is not None:
+            self._update_visible_child()
 
     # ── Toolbar actions ────────────────────────────────────────────────────
 

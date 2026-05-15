@@ -11,7 +11,7 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
-from app.core.dbus_client import DBusClient
+from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
 
 _log = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ class ProfilerView(Gtk.Stack):
 
     def __init__(self, dbus_client: DBusClient, socket_server: SocketServer) -> None:
         super().__init__()
+        self._dbus = dbus_client
         self._socket = socket_server
         self._profiling = False
         self._refresh_pending = False
@@ -74,6 +75,7 @@ class ProfilerView(Gtk.Stack):
 
         socket_server.connect("message-received", self._on_message)
         socket_server.connect("client-disconnected", self._on_client_disconnected)
+        dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
     # ── UI construction ────────────────────────────────────────────────────
 
@@ -83,6 +85,12 @@ class ProfilerView(Gtk.Stack):
         placeholder.set_title("No Extension Selected")
         placeholder.set_description("Select an enabled extension from the list to start profiling.")
         self.add_named(placeholder, "placeholder")
+
+        disabled = Adw.StatusPage()
+        disabled.set_icon_name("action-unavailable-symbolic")
+        disabled.set_title("Extension Disabled")
+        disabled.set_description("Enable the extension to start profiling.")
+        self.add_named(disabled, "disabled")
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add_named(content, "content")
@@ -433,8 +441,29 @@ class ProfilerView(Gtk.Stack):
             self._socket.send({"type": "stop_profiling"})
             self._set_stopped()
         self._target_uuid = uuid
-        self.set_visible_child_name("content" if uuid else "placeholder")
-        self._start_btn.set_sensitive(uuid is not None and not self._profiling)
+        self._update_visible_child()
+
+    def _update_visible_child(self) -> None:
+        uuid = self._target_uuid
+        if uuid is None:
+            self.set_visible_child_name("placeholder")
+            self._start_btn.set_sensitive(False)
+            return
+        if self._dbus.get_extension_state(uuid) != ExtensionState.ENABLED:
+            if self._profiling:
+                self._socket.send({"type": "stop_profiling"})
+                self._set_stopped()
+            self.set_visible_child_name("disabled")
+            self._start_btn.set_sensitive(False)
+            return
+        self.set_visible_child_name("content")
+        self._start_btn.set_sensitive(not self._profiling)
+
+    def _on_extensions_changed(
+        self, _dbus: DBusClient, _extensions: dict[str, Any]
+    ) -> None:
+        if self._target_uuid is not None:
+            self._update_visible_child()
 
     # ── Button handlers ────────────────────────────────────────────────────
 
@@ -456,7 +485,11 @@ class ProfilerView(Gtk.Stack):
 
     def _set_stopped(self) -> None:
         self._profiling = False
-        self._start_btn.set_sensitive(self._target_uuid is not None)
+        enabled = (
+            self._target_uuid is not None
+            and self._dbus.get_extension_state(self._target_uuid) == ExtensionState.ENABLED
+        )
+        self._start_btn.set_sensitive(enabled)
         self._stop_btn.set_sensitive(False)
 
     def _on_save(self, _btn: Gtk.Button) -> None:
