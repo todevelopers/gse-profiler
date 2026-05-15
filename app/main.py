@@ -94,6 +94,12 @@ class MainWindow(Adw.ApplicationWindow):
     def _build_ui(self) -> None:
         self._sidebar_position = 260
 
+        self._sidebar_toggle_btn = Gtk.ToggleButton()
+        self._sidebar_toggle_btn.set_icon_name("sidebar-show-symbolic")
+        self._sidebar_toggle_btn.set_tooltip_text("Toggle Left Panel (F9)")
+        self._sidebar_toggle_btn.set_active(True)
+        self._sidebar_toggle_btn.connect("toggled", self._on_sidebar_btn_toggled)
+
         # ── Content views ──────────────────────────────────────────────────
         self._details_view = DetailsView(self._dbus)
         self._profiler_view = ProfilerView(self._dbus, self._socket)
@@ -149,12 +155,6 @@ class MainWindow(Adw.ApplicationWindow):
         menu_btn.set_menu_model(menu)
 
         self._conn_chip = _ConnectionChip()
-
-        self._sidebar_toggle_btn = Gtk.ToggleButton()
-        self._sidebar_toggle_btn.set_icon_name("sidebar-show-symbolic")
-        self._sidebar_toggle_btn.set_tooltip_text("Toggle Left Panel (F9)")
-        self._sidebar_toggle_btn.set_active(True)
-        self._sidebar_toggle_btn.connect("toggled", self._on_sidebar_btn_toggled)
 
         sidebar_header = Adw.HeaderBar()
         sidebar_header.set_title_widget(Gtk.Label(label="GSE Profiler"))
