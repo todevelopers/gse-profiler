@@ -233,8 +233,6 @@ class ExtensionListView(Gtk.Box):
             (self._system_section, self._system_lb),
             (self._disabled_section, self._disabled_lb),
         ):
-            if not section.get_visible():
-                continue
             child = lb.get_first_child()
             has_visible = False
             while child:
