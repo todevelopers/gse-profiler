@@ -166,6 +166,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._sidebar_toolbar = Adw.ToolbarView()
         self._sidebar_toolbar.add_top_bar(sidebar_header)
         self._sidebar_toolbar.set_content(self._ext_list)
+        self._sidebar_toolbar.add_css_class("sidebar")
 
         # ── Resizable paned split ──────────────────────────────────────────
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
