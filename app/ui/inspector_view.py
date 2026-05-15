@@ -71,6 +71,7 @@ class InspectorView(Gtk.Box):
         self._build_ui()
 
         socket_server.connect("message-received", self._on_message)
+        socket_server.connect("client-connected", self._on_client_connected)
         socket_server.connect("client-disconnected", self._on_disconnected)
 
     # ── UI construction ────────────────────────────────────────────────────
@@ -394,7 +395,7 @@ class InspectorView(Gtk.Box):
     # ── Public API ─────────────────────────────────────────────────────────
 
     def set_target_extension(self, uuid: str | None) -> None:
-        """Set the extension to inspect. Resets the navigation path."""
+        """Set the extension to inspect. Resets path and auto-loads if connected."""
         if uuid != self._current_uuid:
             self._current_uuid = uuid
             self._current_path = []
@@ -402,6 +403,9 @@ class InspectorView(Gtk.Box):
             self._store.splice(0, self._store.get_n_items(), [])
             self._stack.set_visible_child_name("placeholder")
             self._status_lbl.set_label("")
+        if uuid and self._socket.is_client_connected:
+            self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
+            self._status_lbl.set_label("Loading…")
 
     # ── Toolbar actions ────────────────────────────────────────────────────
 
@@ -528,6 +532,15 @@ class InspectorView(Gtk.Box):
                 msg.get("name", ""),
                 msg.get("error", "unknown error"),
             )
+
+    def _on_client_connected(self, _server: SocketServer) -> None:
+        if self._current_uuid:
+            self._socket.send({
+                "type": "inspect",
+                "uuid": self._current_uuid,
+                "path": self._current_path,
+            })
+            self._status_lbl.set_label("Loading…")
 
     def _on_disconnected(self, _server: SocketServer) -> None:
         self._status_lbl.set_label("Disconnected")
