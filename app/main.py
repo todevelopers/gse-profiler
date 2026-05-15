@@ -210,20 +210,10 @@ class MainWindow(Adw.ApplicationWindow):
             self._sidebar_toolbar.set_visible(False)
 
     def _on_paned_position_changed(self, paned: Gtk.Paned, _pspec: object) -> None:
-        if not self._sidebar_toolbar.get_visible():
-            return
-        width = paned.get_allocated_width()
-        if width <= 0:
-            return
-        pos = paned.get_position()
-        max_pos = width // 2
-        if pos > max_pos:
-            paned.handler_block_by_func(self._on_paned_position_changed)
-            paned.set_position(max_pos)
-            paned.handler_unblock_by_func(self._on_paned_position_changed)
-            self._sidebar_position = max_pos
-        else:
-            self._sidebar_position = pos
+        if self._sidebar_toolbar.get_visible():
+            pos = paned.get_position()
+            if pos > 0:
+                self._sidebar_position = pos
 
     # ── D-Bus / socket handlers ────────────────────────────────────────────
 
