@@ -12,7 +12,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk, Pango
 
 from app.core.bridge_manager import BRIDGE_UUID, BridgeManager
 from app.core.dbus_client import DBusClient, ExtensionState
@@ -32,6 +32,9 @@ class _ConnectionChip(Gtk.Label):
 
     def __init__(self) -> None:
         super().__init__()
+        self.set_ellipsize(Pango.EllipsizeMode.END)
+        self.set_width_chars(0)
+        self.set_max_width_chars(14)
         self.set_connected(False)
 
     def set_connected(self, connected: bool) -> None:
@@ -155,13 +158,23 @@ class MainWindow(Adw.ApplicationWindow):
         menu_btn.set_menu_model(menu)
 
         self._conn_chip = _ConnectionChip()
+        self._conn_chip.add_css_class("caption")
+
+        sidebar_title = Gtk.Label(label="GSE Profiler")
+        sidebar_title.set_ellipsize(Pango.EllipsizeMode.END)
+        sidebar_title.set_width_chars(0)
+        sidebar_title.add_css_class("heading")
+
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        title_box.set_valign(Gtk.Align.CENTER)
+        title_box.append(sidebar_title)
+        title_box.append(self._conn_chip)
 
         sidebar_header = Adw.HeaderBar()
-        sidebar_header.set_title_widget(Gtk.Label(label="GSE Profiler"))
+        sidebar_header.set_title_widget(title_box)
         sidebar_header.set_show_start_title_buttons(False)
         sidebar_header.set_show_end_title_buttons(False)
         sidebar_header.pack_end(menu_btn)
-        sidebar_header.pack_end(self._conn_chip)
 
         self._sidebar_toolbar = Adw.ToolbarView()
         self._sidebar_toolbar.add_top_bar(sidebar_header)
