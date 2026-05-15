@@ -26,13 +26,13 @@ export class Inspector {
         try {
             let obj = ext.stateObj;
             for (const key of path) {
-                if (obj == null || typeof obj !== 'object') {
+                if (obj === null || obj === undefined || typeof obj !== 'object') {
                     log(`[gse-profiler-bridge] inspector: path resolution failed at key "${key}"`);
                     return { properties: [] };
                 }
                 obj = obj[key];
             }
-            if (obj == null || typeof obj !== 'object') {
+            if (obj === null || obj === undefined || typeof obj !== 'object') {
                 log(`[gse-profiler-bridge] inspector: resolved path is not an object`);
                 return { properties: [] };
             }
@@ -56,14 +56,17 @@ export class Inspector {
      */
     setProperty(uuid, name, value) {
         const ext = Main.extensionManager.lookup(uuid);
-        if (!ext?.stateObj)
+        if (!ext?.stateObj) {
             return { ok: false, error: 'extension not found' };
+        }
         try {
             const desc = Object.getOwnPropertyDescriptor(ext.stateObj, name);
-            if (!desc)
+            if (!desc) {
                 return { ok: false, error: 'property not found on stateObj' };
-            if (!desc.writable && typeof desc.set !== 'function')
+            }
+            if (!desc.writable && typeof desc.set !== 'function') {
                 return { ok: false, error: 'property is not writable' };
+            }
             ext.stateObj[name] = value;
             return { ok: true };
         } catch (e) {
@@ -83,21 +86,22 @@ function _serializeObject(obj) {
     const proto = Object.getPrototypeOf(obj);
     if (proto && proto !== Object.prototype) {
         for (const name of Object.getOwnPropertyNames(proto)) {
-            if (name === 'constructor') continue;
+            if (name === 'constructor') { continue; }
             const desc = _safeDescriptor(proto, name);
-            if (desc) propsMap.set(name, { desc, isOwn: false, holder: obj });
+            if (desc) { propsMap.set(name, { desc, isOwn: false, holder: obj }); }
         }
     }
 
     // Own properties override prototype entries.
     for (const name of Object.getOwnPropertyNames(obj)) {
         const desc = _safeDescriptor(obj, name);
-        if (desc) propsMap.set(name, { desc, isOwn: true, holder: obj });
+        if (desc) { propsMap.set(name, { desc, isOwn: true, holder: obj }); }
     }
 
     const result = [];
-    for (const [name, { desc, isOwn, holder }] of propsMap)
+    for (const [name, { desc, isOwn, holder }] of propsMap) {
         result.push(_serializeProp(name, desc, isOwn, holder, seen));
+    }
     return result;
 }
 
@@ -109,16 +113,17 @@ function _serializeArray(arr) {
     const limit = Math.min(arr.length, _MAX_CHILDREN);
     for (let i = 0; i < limit; i++) {
         try {
-            let [type, value, children] = _describeValue(arr[i], seen);
+            const [type, value, children] = _describeValue(arr[i], seen);
             const item = { name: String(i), type, value, writable: true };
-            if (children) item.children = children;
+            if (children) { item.children = children; }
             result.push(item);
         } catch (_) {
             result.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
         }
     }
-    if (arr.length > _MAX_CHILDREN)
+    if (arr.length > _MAX_CHILDREN) {
         result.push({ name: '…', type: 'info', value: `${arr.length - _MAX_CHILDREN} more items`, writable: false });
+    }
     return result;
 }
 
@@ -139,25 +144,25 @@ function _serializeProp(name, desc, isOwn, holder, seen) {
     }
 
     const result = { name, type: type ?? 'error', value: value ?? '', writable };
-    if (children) result.children = children;
+    if (children) { result.children = children; }
     return result;
 }
 
 function _describeValue(v, seen) {
-    if (v === null) return ['null', 'null', null];
-    if (v === undefined) return ['undefined', 'undefined', null];
+    if (v === null) { return ['null', 'null', null]; }
+    if (v === undefined) { return ['undefined', 'undefined', null]; }
 
     const t = typeof v;
-    if (t === 'function') return ['function', `function ${v.name || '?'}() { … }`, null];
-    if (t === 'symbol') return ['symbol', v.toString(), null];
-    if (t === 'number') return ['number', String(v), null];
-    if (t === 'boolean') return ['boolean', String(v), null];
+    if (t === 'function') { return ['function', `function ${v.name || '?'}() { … }`, null]; }
+    if (t === 'symbol') { return ['symbol', v.toString(), null]; }
+    if (t === 'number') { return ['number', String(v), null]; }
+    if (t === 'boolean') { return ['boolean', String(v), null]; }
     if (t === 'string') {
         const s = v.length > _MAX_STRING_LEN ? `${v.slice(0, _MAX_STRING_LEN)}…` : v;
         return ['string', s, null];
     }
 
-    if (seen.has(v)) return ['object', '[Circular]', null];
+    if (seen.has(v)) { return ['object', '[Circular]', null]; }
 
     if (Array.isArray(v)) {
         seen.add(v);
@@ -171,8 +176,9 @@ function _describeValue(v, seen) {
                 children.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
             }
         }
-        if (v.length > _MAX_CHILDREN)
+        if (v.length > _MAX_CHILDREN) {
             children.push({ name: '…', type: 'info', value: `${v.length - _MAX_CHILDREN} more`, writable: false });
+        }
         seen.delete(v);
         return ['array', `Array(${v.length})`, children.length > 0 ? children : null];
     }
@@ -183,9 +189,9 @@ function _describeValue(v, seen) {
     try {
         const keys = Object.getOwnPropertyNames(v).slice(0, _MAX_CHILDREN);
         for (const k of keys) {
-            if (k === '__proto__') continue;
+            if (k === '__proto__') { continue; }
             const desc = _safeDescriptor(v, k);
-            if (!desc) continue;
+            if (!desc) { continue; }
             let ct, cv;
             try {
                 if (typeof desc.get === 'function') {

@@ -67,7 +67,7 @@ export class Profiler {
         // Walk the stateObj's prototype chain, stopping at framework base classes.
         let proto = target;
         while (proto) {
-            if (_isStopProto(proto)) break;
+            if (_isStopProto(proto)) { break; }
             log(`[gse-profiler-bridge] patching proto level: ${proto.constructor?.name} keys=[${Object.getOwnPropertyNames(proto).join(',')}]`);
             this.#patchObject(target, proto, '');
             proto = Object.getPrototypeOf(proto);
@@ -81,12 +81,12 @@ export class Profiler {
                 propDesc = Object.getOwnPropertyDescriptor(target, propKey);
             } catch (_e) { continue; }
             const val = propDesc?.value;
-            if (!val || typeof val !== 'object' || visited.has(val)) continue;
+            if (!val || typeof val !== 'object' || visited.has(val)) { continue; }
             visited.add(val);
 
             let sub = val;
             while (sub) {
-                if (_isStopProto(sub)) break;
+                if (_isStopProto(sub)) { break; }
                 log(`[gse-profiler-bridge] patching sub ${propKey} level: ${sub.constructor?.name} keys=[${Object.getOwnPropertyNames(sub).join(',')}]`);
                 this.#patchObject(val, sub, propKey);
                 sub = Object.getPrototypeOf(sub);
