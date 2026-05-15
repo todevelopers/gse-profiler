@@ -6,8 +6,9 @@ import gi
 gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
+gi.require_version("GObject", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from app.core.dbus_client import DBusClient, ExtensionState
 
@@ -31,6 +32,12 @@ _TRANSIENT_STATES = {ExtensionState.DOWNLOADING, ExtensionState.ENABLING, Extens
 
 class DetailsView(Gtk.Stack):
     """Extension details panel: metadata, enable/disable, open folder/prefs."""
+
+    __gtype_name__ = "DetailsView"
+
+    __gsignals__ = {
+        "favorite-toggled": (GObject.SignalFlags.RUN_LAST, None, ()),
+    }
 
     def __init__(self, dbus_client: DBusClient) -> None:
         super().__init__()
@@ -63,6 +70,15 @@ class DetailsView(Gtk.Stack):
         self._state_badge = Gtk.Label()
         self._state_badge.set_valign(Gtk.Align.CENTER)
         self._header_row.add_suffix(self._state_badge)
+
+        self._star_btn = Gtk.ToggleButton()
+        self._star_btn.set_icon_name("non-starred-symbolic")
+        self._star_btn.add_css_class("flat")
+        self._star_btn.set_valign(Gtk.Align.CENTER)
+        self._star_btn.set_tooltip_text("Add to favorites")
+        self._star_handler = self._star_btn.connect("toggled", self._on_star_toggled)
+        self._header_row.add_suffix(self._star_btn)
+
         header_group.add(self._header_row)
         page.add(header_group)
 
@@ -143,7 +159,20 @@ class DetailsView(Gtk.Stack):
         self._populate(uuid, info)
         self.set_visible_child_name("content")
 
+    def set_favorite_state(self, is_fav: bool) -> None:
+        self._star_btn.handler_block_by_func(self._on_star_toggled)
+        self._star_btn.set_active(is_fav)
+        self._star_btn.set_icon_name("starred-symbolic" if is_fav else "non-starred-symbolic")
+        self._star_btn.set_tooltip_text("Remove from favorites" if is_fav else "Add to favorites")
+        self._star_btn.handler_unblock_by_func(self._on_star_toggled)
+
     # ── Signal handlers ────────────────────────────────────────────────────
+
+    def _on_star_toggled(self, btn: Gtk.ToggleButton) -> None:
+        is_fav = btn.get_active()
+        btn.set_icon_name("starred-symbolic" if is_fav else "non-starred-symbolic")
+        btn.set_tooltip_text("Remove from favorites" if is_fav else "Add to favorites")
+        self.emit("favorite-toggled")
 
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict[str, Any]) -> None:
         self._all_extensions = extensions

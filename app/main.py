@@ -131,6 +131,7 @@ class MainWindow(Adw.ApplicationWindow):
         # ── Sidebar (extension list) ───────────────────────────────────────
         self._ext_list = ExtensionListView(self._dbus)
         self._ext_list.connect("extension-activated", self._on_extension_activated)
+        self._details_view.connect("favorite-toggled", self._on_favorite_toggled)
 
         menu = Gio.Menu()
         section = Gio.Menu()
@@ -176,6 +177,7 @@ class MainWindow(Adw.ApplicationWindow):
         enabled = info.get("state") == ExtensionState.ENABLED
 
         self._details_view.set_active_extension(uuid)
+        self._details_view.set_favorite_state(self._ext_list.is_favorite(uuid))
         self._profiler_view.set_target_extension(uuid)
         self._inspector_view.set_target_extension(uuid)
         self._logs_view.set_selected_extension(uuid)
@@ -187,6 +189,10 @@ class MainWindow(Adw.ApplicationWindow):
             visible = self._view_stack.get_visible_child_name()
             if visible in ("profiler", "inspector"):
                 self._view_stack.set_visible_child_name("details")
+
+    def _on_favorite_toggled(self, _details: DetailsView) -> None:
+        if self._active_uuid:
+            self._ext_list.toggle_favorite(self._active_uuid)
 
     # ── D-Bus / socket handlers ────────────────────────────────────────────
 

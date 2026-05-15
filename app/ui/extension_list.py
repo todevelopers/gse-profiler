@@ -1,12 +1,15 @@
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 import gi
 
+gi.require_version("GLib", "2.0")
 gi.require_version("GObject", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import GObject, Gtk, Pango
+from gi.repository import GLib, GObject, Gtk, Pango
 
 from app.core.bridge_manager import BRIDGE_UUID
 from app.core.dbus_client import DBusClient, ExtensionState
@@ -14,6 +17,27 @@ from app.core.dbus_client import DBusClient, ExtensionState
 _log = logging.getLogger(__name__)
 
 _ALL_DOT_CSS = ("success", "error", "dim-label", "warning")
+
+_FAVORITES_PATH = Path(GLib.get_user_config_dir()) / "gse-profiler" / "favorites.json"
+
+
+def _load_favorites() -> set[str]:
+    try:
+        if _FAVORITES_PATH.exists():
+            return set(json.loads(_FAVORITES_PATH.read_text(encoding="utf-8")))
+    except Exception:
+        pass
+    return set()
+
+
+def _save_favorites(favorites: set[str]) -> None:
+    try:
+        _FAVORITES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _FAVORITES_PATH.write_text(
+            json.dumps(sorted(favorites), indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        _log.warning("Failed to save favorites: %s", exc)
 
 
 class _ExtRow(Gtk.ListBoxRow):
@@ -70,7 +94,7 @@ class _ExtRow(Gtk.ListBoxRow):
 
 
 class ExtensionListView(Gtk.Box):
-    """Sidebar extension list grouped into User / System / Disabled sections."""
+    """Sidebar extension list with Favorites / User / System / Disabled sections."""
 
     __gtype_name__ = "ExtensionListView"
 
@@ -84,7 +108,9 @@ class ExtensionListView(Gtk.Box):
         self._active_uuid: str | None = None
         self._rows: dict[str, _ExtRow] = {}
         self._search_text = ""
-        self._in_restore = False  # suppress extension-activated during selection restore
+        self._in_restore = False
+        self._favorites: set[str] = _load_favorites()
+        self._last_extensions: dict[str, Any] = {}
 
         self._build_ui()
         dbus_client.connect("extensions-changed", self._on_extensions_changed)
@@ -109,14 +135,25 @@ class ExtensionListView(Gtk.Box):
         scroll.set_child(self._sections_box)
         self.append(scroll)
 
-        self._user_section, self._user_lb = self._make_section("User Extensions")
-        self._system_section, self._system_lb = self._make_section("System Extensions")
+        self._fav_section,      self._fav_lb      = self._make_section("Favorites")
+        self._user_section,     self._user_lb     = self._make_section("User Extensions")
+        self._system_section,   self._system_lb   = self._make_section("System Extensions")
         self._disabled_section, self._disabled_lb = self._make_section("Disabled Extensions")
 
-        for section in (self._user_section, self._system_section, self._disabled_section):
+        for section in (
+            self._fav_section,
+            self._user_section,
+            self._system_section,
+            self._disabled_section,
+        ):
             self._sections_box.append(section)
 
-        self._listboxes = [self._user_lb, self._system_lb, self._disabled_lb]
+        self._listboxes = [
+            self._fav_lb,
+            self._user_lb,
+            self._system_lb,
+            self._disabled_lb,
+        ]
 
     def _make_section(self, title: str) -> tuple[Gtk.Box, Gtk.ListBox]:
         title_lbl = Gtk.Label(label=title)
@@ -177,6 +214,21 @@ class ExtensionListView(Gtk.Box):
         self._active_uuid = uuid
         self._restore_selection()
 
+    def is_favorite(self, uuid: str) -> bool:
+        return uuid in self._favorites
+
+    def toggle_favorite(self, uuid: str) -> None:
+        if uuid in self._favorites:
+            self._favorites.discard(uuid)
+        else:
+            self._favorites.add(uuid)
+        _save_favorites(self._favorites)
+        GLib.idle_add(self._rebuild_from_cache)
+
+    def _rebuild_from_cache(self) -> bool:
+        self._rebuild(self._last_extensions)
+        return GLib.SOURCE_REMOVE
+
     # ── Signal handlers ────────────────────────────────────────────────────
 
     def _on_row_selected(self, lb: Gtk.ListBox, row: _ExtRow | None) -> None:
@@ -189,6 +241,7 @@ class ExtensionListView(Gtk.Box):
         self.emit("extension-activated", row.uuid)
 
     def _on_extensions_changed(self, _dbus: DBusClient, extensions: dict[str, Any]) -> None:
+        self._last_extensions = extensions
         self._rebuild(extensions)
 
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
@@ -206,8 +259,9 @@ class ExtensionListView(Gtk.Box):
                 child = nxt
         self._rows.clear()
 
-        user_items: list[tuple[str, dict]] = []
-        system_items: list[tuple[str, dict]] = []
+        fav_items:      list[tuple[str, dict]] = []
+        user_items:     list[tuple[str, dict]] = []
+        system_items:   list[tuple[str, dict]] = []
         disabled_items: list[tuple[str, dict]] = []
 
         for uuid, info in sorted(
@@ -216,8 +270,11 @@ class ExtensionListView(Gtk.Box):
         ):
             if uuid == BRIDGE_UUID:
                 continue
+            if uuid in self._favorites:
+                fav_items.append((uuid, info))
+                continue
             state = info.get("state", ExtensionState.DISABLED)
-            ext_type = info.get("type", 2)  # 1=system, 2=user
+            ext_type = info.get("type", 2)
             if state == ExtensionState.ENABLED:
                 if ext_type == 1:
                     system_items.append((uuid, info))
@@ -226,21 +283,18 @@ class ExtensionListView(Gtk.Box):
             else:
                 disabled_items.append((uuid, info))
 
-        for uuid, info in user_items:
-            row = _ExtRow(uuid, info)
-            self._user_lb.append(row)
-            self._rows[uuid] = row
+        for lb, items in (
+            (self._fav_lb,      fav_items),
+            (self._user_lb,     user_items),
+            (self._system_lb,   system_items),
+            (self._disabled_lb, disabled_items),
+        ):
+            for uuid, info in items:
+                row = _ExtRow(uuid, info)
+                lb.append(row)
+                self._rows[uuid] = row
 
-        for uuid, info in system_items:
-            row = _ExtRow(uuid, info)
-            self._system_lb.append(row)
-            self._rows[uuid] = row
-
-        for uuid, info in disabled_items:
-            row = _ExtRow(uuid, info)
-            self._disabled_lb.append(row)
-            self._rows[uuid] = row
-
+        self._fav_section.set_visible(bool(fav_items))
         self._user_section.set_visible(bool(user_items))
         self._system_section.set_visible(bool(system_items))
         self._disabled_section.set_visible(bool(disabled_items))
@@ -258,8 +312,9 @@ class ExtensionListView(Gtk.Box):
                 row.set_visible(True)
 
         for section, lb in (
-            (self._user_section, self._user_lb),
-            (self._system_section, self._system_lb),
+            (self._fav_section,      self._fav_lb),
+            (self._user_section,     self._user_lb),
+            (self._system_section,   self._system_lb),
             (self._disabled_section, self._disabled_lb),
         ):
             child = lb.get_first_child()
