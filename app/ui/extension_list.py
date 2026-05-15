@@ -227,7 +227,7 @@ class ExtensionListView(Gtk.Box):
 
     def _rebuild_from_cache(self) -> bool:
         self._rebuild(self._last_extensions)
-        return GLib.SOURCE_REMOVE
+        return bool(GLib.SOURCE_REMOVE)
 
     # ── Signal handlers ────────────────────────────────────────────────────
 
