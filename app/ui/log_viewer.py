@@ -9,7 +9,7 @@ import gi
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import GObject, Gio, GLib, Gtk
+from gi.repository import Gio, GLib, GObject, Gtk
 
 from app.core.dbus_client import DBusClient
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
