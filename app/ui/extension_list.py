@@ -119,13 +119,27 @@ class ExtensionListView(Gtk.Box):
         self._listboxes = [self._user_lb, self._system_lb, self._disabled_lb]
 
     def _make_section(self, title: str) -> tuple[Gtk.Box, Gtk.ListBox]:
-        header = Gtk.Label(label=title)
-        header.set_halign(Gtk.Align.START)
-        header.set_margin_start(12)
-        header.set_margin_top(10)
-        header.set_margin_bottom(4)
-        header.add_css_class("heading")
-        header.add_css_class("dim-label")
+        title_lbl = Gtk.Label(label=title)
+        title_lbl.set_hexpand(True)
+        title_lbl.set_halign(Gtk.Align.START)
+        title_lbl.add_css_class("heading")
+        title_lbl.add_css_class("dim-label")
+
+        arrow = Gtk.Image.new_from_icon_name("pan-down-symbolic")
+
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        header_box.set_margin_start(4)
+        header_box.set_margin_end(4)
+        header_box.append(title_lbl)
+        header_box.append(arrow)
+
+        toggle_btn = Gtk.Button()
+        toggle_btn.set_child(header_box)
+        toggle_btn.add_css_class("flat")
+        toggle_btn.set_margin_start(4)
+        toggle_btn.set_margin_end(4)
+        toggle_btn.set_margin_top(6)
+        toggle_btn.set_margin_bottom(2)
 
         lb = Gtk.ListBox()
         lb.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -135,10 +149,25 @@ class ExtensionListView(Gtk.Box):
         lb.set_margin_bottom(4)
         lb.connect("row-selected", self._on_row_selected)
 
+        revealer = Gtk.Revealer()
+        revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        revealer.set_transition_duration(200)
+        revealer.set_reveal_child(True)
+        revealer.set_child(lb)
+
+        def _on_toggle(_btn: Gtk.Button) -> None:
+            expanded = not revealer.get_reveal_child()
+            revealer.set_reveal_child(expanded)
+            arrow.set_from_icon_name(
+                "pan-down-symbolic" if expanded else "pan-end-symbolic"
+            )
+
+        toggle_btn.connect("clicked", _on_toggle)
+
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.set_visible(False)
-        box.append(header)
-        box.append(lb)
+        box.append(toggle_btn)
+        box.append(revealer)
         return box, lb
 
     # ── Public API ─────────────────────────────────────────────────────────
