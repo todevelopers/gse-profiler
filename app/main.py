@@ -173,8 +173,6 @@ class MainWindow(Adw.ApplicationWindow):
         self, _list: ExtensionListView, uuid: str
     ) -> None:
         self._active_uuid = uuid
-        info = self._last_extensions.get(uuid, {})
-        enabled = info.get("state") == ExtensionState.ENABLED
 
         self._details_view.set_active_extension(uuid)
         self._details_view.set_favorite_state(self._ext_list.is_favorite(uuid))
@@ -196,10 +194,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._update_bridge_actions()
 
         if self._active_uuid:
-            if self._active_uuid in extensions:
-                info = extensions[self._active_uuid]
-                enabled = info.get("state") == ExtensionState.ENABLED
-            else:
+            if self._active_uuid not in extensions:
                 # Extension was removed
                 self._active_uuid = None
                 self._details_view.set_active_extension(None)
