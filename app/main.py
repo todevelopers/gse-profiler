@@ -158,6 +158,8 @@ class MainWindow(Adw.ApplicationWindow):
 
         sidebar_header = Adw.HeaderBar()
         sidebar_header.set_title_widget(Gtk.Label(label="GSE Profiler"))
+        sidebar_header.set_show_start_title_buttons(False)
+        sidebar_header.set_show_end_title_buttons(False)
         sidebar_header.pack_end(menu_btn)
         sidebar_header.pack_end(self._conn_chip)
 
