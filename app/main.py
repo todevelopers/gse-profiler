@@ -81,6 +81,10 @@ class MainWindow(Adw.ApplicationWindow):
         self._uninstall_action.connect("activate", self._on_uninstall_bridge)
         self.add_action(self._uninstall_action)
 
+        toggle_action = Gio.SimpleAction.new("toggle-sidebar", None)
+        toggle_action.connect("activate", self._on_toggle_sidebar)
+        self.add_action(toggle_action)
+
     def _update_bridge_actions(self) -> None:
         installed = self._bridge.is_installed
         self._install_action.set_enabled(not installed)
@@ -88,6 +92,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._uninstall_action.set_enabled(installed)
 
     def _build_ui(self) -> None:
+        self._sidebar_position = 260
+
         # ── Content views ──────────────────────────────────────────────────
         self._details_view = DetailsView(self._dbus)
         self._profiler_view = ProfilerView(self._dbus, self._socket)
@@ -119,14 +125,11 @@ class MainWindow(Adw.ApplicationWindow):
 
         content_header = Adw.HeaderBar()
         content_header.set_title_widget(switcher)
+        content_header.pack_start(self._sidebar_toggle_btn)
 
         content_toolbar = Adw.ToolbarView()
         content_toolbar.add_top_bar(content_header)
         content_toolbar.set_content(self._view_stack)
-
-        content_page = Adw.NavigationPage()
-        content_page.set_title("GSE Profiler")
-        content_page.set_child(content_toolbar)
 
         # ── Sidebar (extension list) ───────────────────────────────────────
         self._ext_list = ExtensionListView(self._dbus)
@@ -147,25 +150,31 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._conn_chip = _ConnectionChip()
 
+        self._sidebar_toggle_btn = Gtk.ToggleButton()
+        self._sidebar_toggle_btn.set_icon_name("sidebar-show-symbolic")
+        self._sidebar_toggle_btn.set_tooltip_text("Toggle Left Panel (F9)")
+        self._sidebar_toggle_btn.set_active(True)
+        self._sidebar_toggle_btn.connect("toggled", self._on_sidebar_btn_toggled)
+
         sidebar_header = Adw.HeaderBar()
         sidebar_header.set_title_widget(Gtk.Label(label="GSE Profiler"))
         sidebar_header.pack_end(menu_btn)
         sidebar_header.pack_end(self._conn_chip)
 
-        sidebar_toolbar = Adw.ToolbarView()
-        sidebar_toolbar.add_top_bar(sidebar_header)
-        sidebar_toolbar.set_content(self._ext_list)
+        self._sidebar_toolbar = Adw.ToolbarView()
+        self._sidebar_toolbar.add_top_bar(sidebar_header)
+        self._sidebar_toolbar.set_content(self._ext_list)
 
-        sidebar_page = Adw.NavigationPage()
-        sidebar_page.set_title("Extensions")
-        sidebar_page.set_child(sidebar_toolbar)
+        # ── Resizable paned split ──────────────────────────────────────────
+        self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
+        self._paned.set_start_child(self._sidebar_toolbar)
+        self._paned.set_end_child(content_toolbar)
+        self._paned.set_position(self._sidebar_position)
+        self._paned.set_shrink_start_child(True)
+        self._paned.set_shrink_end_child(False)
+        self._paned.connect("notify::position", self._on_paned_position_changed)
 
-        # ── Split view ─────────────────────────────────────────────────────
-        split = Adw.NavigationSplitView()
-        split.set_sidebar(sidebar_page)
-        split.set_content(content_page)
-
-        self.set_content(split)
+        self.set_content(self._paned)
 
     # ── Extension selection ────────────────────────────────────────────────
 
@@ -184,6 +193,37 @@ class MainWindow(Adw.ApplicationWindow):
     def _on_favorite_toggled(self, _details: DetailsView) -> None:
         if self._active_uuid:
             self._ext_list.toggle_favorite(self._active_uuid)
+
+    # ── Sidebar toggle ─────────────────────────────────────────────────────
+
+    def _on_toggle_sidebar(self, _action: Gio.SimpleAction, _param: object) -> None:
+        self._sidebar_toggle_btn.set_active(not self._sidebar_toggle_btn.get_active())
+
+    def _on_sidebar_btn_toggled(self, btn: Gtk.ToggleButton) -> None:
+        if btn.get_active():
+            self._sidebar_toolbar.set_visible(True)
+            self._paned.set_position(self._sidebar_position)
+        else:
+            pos = self._paned.get_position()
+            if pos > 0:
+                self._sidebar_position = pos
+            self._sidebar_toolbar.set_visible(False)
+
+    def _on_paned_position_changed(self, paned: Gtk.Paned, _pspec: object) -> None:
+        if not self._sidebar_toolbar.get_visible():
+            return
+        width = paned.get_allocated_width()
+        if width <= 0:
+            return
+        pos = paned.get_position()
+        max_pos = width // 2
+        if pos > max_pos:
+            paned.handler_block_by_func(self._on_paned_position_changed)
+            paned.set_position(max_pos)
+            paned.handler_unblock_by_func(self._on_paned_position_changed)
+            self._sidebar_position = max_pos
+        else:
+            self._sidebar_position = pos
 
     # ── D-Bus / socket handlers ────────────────────────────────────────────
 
@@ -241,6 +281,7 @@ class Application(Adw.Application):
             socket_server=self._socket_server,
             bridge=self._bridge,
         )
+        self.set_accels_for_action("win.toggle-sidebar", ["F9"])
         self._win.present()
         self._bootstrap_handler = self._dbus_client.connect(
             "extensions-changed", self._on_ready_for_bootstrap
