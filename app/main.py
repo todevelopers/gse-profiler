@@ -173,6 +173,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._paned.set_start_child(self._sidebar_toolbar)
         self._paned.set_end_child(content_toolbar)
         self._paned.set_position(self._sidebar_position)
+        self._paned.set_resize_start_child(False)
+        self._paned.set_resize_end_child(True)
         self._paned.set_shrink_start_child(True)
         self._paned.set_shrink_end_child(False)
         self._paned.connect("notify::position", self._on_paned_position_changed)
