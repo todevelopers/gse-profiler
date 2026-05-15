@@ -98,7 +98,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._view_stack = Adw.ViewStack()
 
         details_page = self._view_stack.add_titled(self._details_view, "details", "Details")
-        details_page.set_icon_name("dialog-information-symbolic")
+        details_page.set_icon_name("application-x-addon-symbolic")
 
         self._profiler_page = self._view_stack.add_titled(
             self._profiler_view, "profiler", "Profiler"
