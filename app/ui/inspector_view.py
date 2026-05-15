@@ -54,11 +54,11 @@ class PropertyItem(GObject.Object):
         self.children_data: list[dict[str, Any]] = []
 
 
-class InspectorView(Gtk.Box):
+class InspectorView(Gtk.Stack):
     """Live extension stateObj inspector — Phase 5."""
 
     def __init__(self, dbus_client: DBusClient, socket_server: SocketServer) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__()
         self._dbus = dbus_client
         self._socket = socket_server
         self._current_uuid: str | None = None
@@ -77,6 +77,16 @@ class InspectorView(Gtk.Box):
     # ── UI construction ────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        no_selection = Adw.StatusPage()
+        no_selection.set_icon_name("edit-find-symbolic")
+        no_selection.set_title("No Extension Selected")
+        no_selection.set_description("Select an enabled extension from the list to inspect its state object.")
+        self.add_named(no_selection, "no-selection")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add_named(content, "content")
+        self.set_visible_child_name("no-selection")
+
         # ── Toolbar ────────────────────────────────────────────────────────
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         toolbar.set_margin_start(6)
@@ -172,10 +182,10 @@ class InspectorView(Gtk.Box):
         self._breadcrumb_revealer.set_reveal_child(False)
         self._breadcrumb_revealer.set_child(self._breadcrumb_box)
 
-        self.append(toolbar)
-        self.append(self._breadcrumb_revealer)
-        self.append(Gtk.Separator())
-        self.append(self._stack)
+        content.append(toolbar)
+        content.append(self._breadcrumb_revealer)
+        content.append(Gtk.Separator())
+        content.append(self._stack)
 
     # ── Name column factory ────────────────────────────────────────────────
 
@@ -403,6 +413,7 @@ class InspectorView(Gtk.Box):
             self._store.splice(0, self._store.get_n_items(), [])
             self._stack.set_visible_child_name("placeholder")
             self._status_lbl.set_label("")
+        self.set_visible_child_name("content" if uuid else "no-selection")
         if uuid and self._socket.is_client_connected:
             self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
             self._status_lbl.set_label("Loading…")
