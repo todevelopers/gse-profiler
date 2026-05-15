@@ -55,11 +55,11 @@ class FunctionStat(GObject.Object):
             self.max_ms = duration_ms
 
 
-class ProfilerView(Gtk.Box):
+class ProfilerView(Gtk.Stack):
     """Live function timing profiler."""
 
     def __init__(self, dbus_client: DBusClient, socket_server: SocketServer) -> None:
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        super().__init__()
         self._socket = socket_server
         self._profiling = False
         self._refresh_pending = False
@@ -78,6 +78,16 @@ class ProfilerView(Gtk.Box):
     # ── UI construction ────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        placeholder = Adw.StatusPage()
+        placeholder.set_icon_name("power-profile-performance-symbolic")
+        placeholder.set_title("No Extension Selected")
+        placeholder.set_description("Select an enabled extension from the list to start profiling.")
+        self.add_named(placeholder, "placeholder")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add_named(content, "content")
+        self.set_visible_child_name("placeholder")
+
         # ── Toolbar ────────────────────────────────────────────────────────
         self._start_btn = Gtk.Button(label="Start profiling")
         self._start_btn.set_tooltip_text("Start profiling selected extension")
@@ -174,9 +184,9 @@ class ProfilerView(Gtk.Box):
         paned.set_position(300)
         paned.set_vexpand(True)
 
-        self.append(toolbar)
-        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        self.append(paned)
+        content.append(toolbar)
+        content.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        content.append(paned)
 
     # ── Column helpers ─────────────────────────────────────────────────────
 
@@ -423,6 +433,7 @@ class ProfilerView(Gtk.Box):
             self._socket.send({"type": "stop_profiling"})
             self._set_stopped()
         self._target_uuid = uuid
+        self.set_visible_child_name("content" if uuid else "placeholder")
         self._start_btn.set_sensitive(uuid is not None and not self._profiling)
 
     # ── Button handlers ────────────────────────────────────────────────────

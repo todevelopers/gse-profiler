@@ -182,13 +182,6 @@ class MainWindow(Adw.ApplicationWindow):
         self._inspector_view.set_target_extension(uuid)
         self._logs_view.set_selected_extension(uuid)
 
-        self._profiler_page.set_enabled(enabled)
-        self._inspector_page.set_enabled(enabled)
-
-        if not enabled:
-            visible = self._view_stack.get_visible_child_name()
-            if visible in ("profiler", "inspector"):
-                self._view_stack.set_visible_child_name("details")
 
     def _on_favorite_toggled(self, _details: DetailsView) -> None:
         if self._active_uuid:
@@ -206,17 +199,9 @@ class MainWindow(Adw.ApplicationWindow):
             if self._active_uuid in extensions:
                 info = extensions[self._active_uuid]
                 enabled = info.get("state") == ExtensionState.ENABLED
-                self._profiler_page.set_enabled(enabled)
-                self._inspector_page.set_enabled(enabled)
-                if not enabled:
-                    visible = self._view_stack.get_visible_child_name()
-                    if visible in ("profiler", "inspector"):
-                        self._view_stack.set_visible_child_name("details")
             else:
                 # Extension was removed
                 self._active_uuid = None
-                self._profiler_page.set_enabled(True)
-                self._inspector_page.set_enabled(True)
                 self._details_view.set_active_extension(None)
                 self._profiler_view.set_target_extension(None)
                 self._inspector_view.set_target_extension(None)
