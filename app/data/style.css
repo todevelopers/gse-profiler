@@ -490,25 +490,3 @@ columnview.log-view row {
   font-size: 12px;
 }
 
-/* Empty state inside the content child */
-.prof-empty {
-  padding: 60px 24px;
-}
-
-.prof-empty-icon {
-  min-width: 56px;
-  min-height: 56px;
-  border-radius: 12px;
-  background-color: alpha(@accent_color, 0.14);
-  color: @accent_color;
-}
-
-.prof-empty-title {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.prof-empty-sub {
-  font-size: 12px;
-  opacity: 0.65;
-}

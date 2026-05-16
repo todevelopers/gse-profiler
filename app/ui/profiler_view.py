@@ -216,41 +216,17 @@ class ProfilerView(Gtk.Stack):
     # ── Empty state (inside content) ──────────────────────────────────────
 
     def _build_empty_state(self) -> Gtk.Widget:
-        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        outer.set_valign(Gtk.Align.CENTER)
-        outer.set_halign(Gtk.Align.CENTER)
-        outer.set_vexpand(True)
-        outer.add_css_class("prof-empty")
-        outer.set_spacing(8)
-
-        icon_wrap = Gtk.Box()
-        icon_wrap.add_css_class("prof-empty-icon")
-        icon_wrap.set_halign(Gtk.Align.CENTER)
-        icon_wrap.set_valign(Gtk.Align.CENTER)
-        icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
-        icon.set_pixel_size(28)
-        icon.set_halign(Gtk.Align.CENTER)
-        icon.set_valign(Gtk.Align.CENTER)
-        icon_wrap.append(icon)
-        outer.append(icon_wrap)
-
-        title = Gtk.Label(label="Ready to profile")
-        title.add_css_class("prof-empty-title")
-        outer.append(title)
-
-        sub = Gtk.Label(
-            label="The bridge patches every function on the target extension's "
-                  "stateObj and records the time spent in each."
+        page = Adw.StatusPage()
+        page.set_icon_name("power-profile-performance-symbolic")
+        page.set_title("Ready to profile")
+        page.set_description(
+            "The bridge patches every function on the target extension's "
+            "stateObj and records the time spent in each."
         )
-        sub.set_wrap(True)
-        sub.set_justify(Gtk.Justification.CENTER)
-        sub.set_max_width_chars(48)
-        sub.add_css_class("prof-empty-sub")
-        outer.append(sub)
+        page.set_vexpand(True)
 
         actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         actions.set_halign(Gtk.Align.CENTER)
-        actions.set_margin_top(8)
 
         start_btn = Gtk.Button()
         start_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -258,6 +234,7 @@ class ProfilerView(Gtk.Stack):
         start_box.append(Gtk.Label(label="Start"))
         start_btn.set_child(start_box)
         start_btn.add_css_class("suggested-action")
+        start_btn.add_css_class("pill")
         start_btn.connect("clicked", self._on_start_stop)
         actions.append(start_btn)
 
@@ -266,11 +243,12 @@ class ProfilerView(Gtk.Stack):
         load_box.append(Gtk.Image.new_from_icon_name("document-open-symbolic"))
         load_box.append(Gtk.Label(label="Load profile…"))
         load_btn.set_child(load_box)
+        load_btn.add_css_class("pill")
         load_btn.connect("clicked", self._on_load)
         actions.append(load_btn)
 
-        outer.append(actions)
-        return outer
+        page.set_child(actions)
+        return page
 
     # ── Data view (cards + timeline panel + table) ────────────────────────
 
