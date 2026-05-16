@@ -312,7 +312,9 @@ class LogViewerView(Gtk.Box):
         col_view.add_css_class("log-view")
         self._col_view = col_view
 
-        # TIME column — also responsible for tinting the parent row by severity
+        # TIME column — each cell wraps its content in a Gtk.Box so the
+        # severity tint can be applied to the box's background (avoids
+        # walking the widget tree to reach the private row widget).
         time_fac = Gtk.SignalListItemFactory()
         time_fac.connect("setup", self._time_setup)
         time_fac.connect("bind", self._time_bind)
@@ -362,81 +364,86 @@ class LogViewerView(Gtk.Box):
 
     # ── Column factories ───────────────────────────────────────────────────
 
+    def _make_cell_box(self, content: Gtk.Widget) -> Gtk.Box:
+        """Wrap a cell's content widget in a Gtk.Box that fills the cell so
+        the severity tint can be applied to the box background."""
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.set_hexpand(True)
+        box.add_css_class("log-cell")
+        box.append(content)
+        return box
+
+    def _apply_cell_tint(self, box: Gtk.Box, bucket: str) -> None:
+        for cls in ("cell-warn", "cell-error"):
+            box.remove_css_class(cls)
+        if bucket == _BUCKET_ERROR:
+            box.add_css_class("cell-error")
+        elif bucket == _BUCKET_WARN:
+            box.add_css_class("cell-warn")
+
     def _time_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         label = Gtk.Label()
         label.set_halign(Gtk.Align.START)
+        label.set_hexpand(True)
         label.add_css_class("log-time")
-        list_item.set_child(label)
+        list_item.set_child(self._make_cell_box(label))
 
     def _time_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: LogRowItem = list_item.get_item()
-        label: Gtk.Label = list_item.get_child()
+        box: Gtk.Box = list_item.get_child()
+        label: Gtk.Label = box.get_first_child()
         label.set_label(item.time_str)
-        # Tint the parent row according to severity bucket
-        self._apply_row_class(label, item.bucket)
+        self._apply_cell_tint(box, item.bucket)
 
     def _level_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         label = Gtk.Label()
         label.set_halign(Gtk.Align.START)
+        label.set_valign(Gtk.Align.CENTER)
         label.add_css_class("log-level-pill")
-        list_item.set_child(label)
+        list_item.set_child(self._make_cell_box(label))
 
     def _level_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: LogRowItem = list_item.get_item()
-        label: Gtk.Label = list_item.get_child()
+        box: Gtk.Box = list_item.get_child()
+        label: Gtk.Label = box.get_first_child()
         for cls in _LEVEL_PILL_CLASSES:
             label.remove_css_class(cls)
         label.set_label(_bucket_label(item.bucket))
         label.add_css_class(_bucket_pill_class(item.bucket))
+        self._apply_cell_tint(box, item.bucket)
 
     def _tag_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         label = Gtk.Label()
         label.set_halign(Gtk.Align.START)
+        label.set_hexpand(True)
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.add_css_class("log-tag")
-        list_item.set_child(label)
+        list_item.set_child(self._make_cell_box(label))
 
     def _tag_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: LogRowItem = list_item.get_item()
-        label: Gtk.Label = list_item.get_child()
+        box: Gtk.Box = list_item.get_child()
+        label: Gtk.Label = box.get_first_child()
         for cls in _TAG_CSS_CLASSES:
             label.remove_css_class(cls)
         label.set_label(f"[{item.tag}]")
         label.add_css_class(_tag_color_class(item.tag))
+        self._apply_cell_tint(box, item.bucket)
 
     def _msg_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         label = Gtk.Label()
         label.set_halign(Gtk.Align.START)
-        label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_hexpand(True)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
         label.add_css_class("log-message")
-        list_item.set_child(label)
+        list_item.set_child(self._make_cell_box(label))
 
     def _msg_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: LogRowItem = list_item.get_item()
-        label: Gtk.Label = list_item.get_child()
+        box: Gtk.Box = list_item.get_child()
+        label: Gtk.Label = box.get_first_child()
         label.set_label(item.body)
-
-    def _apply_row_class(self, cell_widget: Gtk.Widget, bucket: str) -> None:
-        """Walk up parent chain to find the GtkListItemWidget (CSS name 'row')
-        and add/remove the severity tint class on it."""
-        parent = cell_widget.get_parent()
-        for _ in range(5):
-            if parent is None:
-                return
-            try:
-                name = parent.get_css_name()
-            except Exception:
-                name = ""
-            if name == "row":
-                for cls in ("row-warn", "row-error"):
-                    parent.remove_css_class(cls)
-                if bucket == _BUCKET_ERROR:
-                    parent.add_css_class("row-error")
-                elif bucket == _BUCKET_WARN:
-                    parent.add_css_class("row-warn")
-                return
-            parent = parent.get_parent()
+        self._apply_cell_tint(box, item.bucket)
 
     # ── Command bar handlers ───────────────────────────────────────────────
 

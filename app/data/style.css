@@ -262,21 +262,25 @@ columnview > header > .button label {
 .log-tag.tag-cA { color: #ffbe6f; }
 .log-tag.tag-cB { color: #dc8add; }
 
-/* Row tints — subtle backgrounds for elevated severity rows */
-columnview.log-view > listview > row.row-warn {
-  background-color: alpha(#e5a50a, 0.08);
+/* Cell tints — applied to the wrapping log-cell box so the severity hue
+   spans the full cell area. Zero cell padding (below) makes adjacent cells
+   visually flow into one continuous tinted band per row. */
+columnview.log-view box.log-cell.cell-warn {
+  background-color: alpha(#e5a50a, 0.10);
 }
 
-columnview.log-view > listview > row.row-error {
-  background-color: alpha(@error_color, 0.10);
+columnview.log-view box.log-cell.cell-error {
+  background-color: alpha(@error_color, 0.12);
 }
 
-columnview.log-view > listview > row.row-warn:hover {
-  background-color: alpha(#e5a50a, 0.15);
+/* Drop cell padding inside the log view so cell-tinted boxes meet without
+   gaps. Internal horizontal breathing room is provided by the cell box. */
+columnview.log-view > listview > row > cell {
+  padding: 0;
 }
 
-columnview.log-view > listview > row.row-error:hover {
-  background-color: alpha(@error_color, 0.18);
+.log-cell {
+  padding: 0 6px;
 }
 
 /* Match Inspector's compact column-view row metrics for the log table */
