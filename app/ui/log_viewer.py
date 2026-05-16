@@ -344,10 +344,37 @@ class LogViewerView(Gtk.Box):
         self._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self._scroll.set_child(col_view)
 
+        # ── Empty-state stack (wraps the list) ─────────────────────────────
+        self._empty_page = Adw.StatusPage()
+        self._empty_page.set_icon_name("text-x-generic-symbolic")
+        self._empty_page.set_title("No log entries yet")
+        self._empty_page.set_description(
+            "Press Start above to begin tailing the system journal."
+        )
+        self._empty_page.set_vexpand(True)
+
+        empty_start_btn = Gtk.Button()
+        empty_start_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        empty_start_box.append(Gtk.Image.new_from_icon_name("media-playback-start-symbolic"))
+        empty_start_box.append(Gtk.Label(label="Start"))
+        empty_start_btn.set_child(empty_start_box)
+        empty_start_btn.add_css_class("suggested-action")
+        empty_start_btn.add_css_class("pill")
+        empty_start_btn.set_halign(Gtk.Align.CENTER)
+        empty_start_btn.connect("clicked", self._on_start_stop)
+        self._empty_start_btn = empty_start_btn
+        self._empty_page.set_child(empty_start_btn)
+
+        self._list_stack = Gtk.Stack()
+        self._list_stack.set_vexpand(True)
+        self._list_stack.add_named(self._empty_page, "empty")
+        self._list_stack.add_named(self._scroll, "data")
+        self._list_stack.set_visible_child_name("empty")
+
         self.append(filter_bar)
         self.append(self._cmd_revealer)
         self.append(status_bar)
-        self.append(self._scroll)
+        self.append(self._list_stack)
 
         self._update_status_label()
 
@@ -486,12 +513,14 @@ class LogViewerView(Gtk.Box):
         self._is_running = True
         self._set_start_stop_state(running=True)
         self._set_state_pill(running=True)
+        self._update_list_stack()
 
     def _do_stop(self) -> None:
         self._reader.stop()
         self._is_running = False
         self._set_start_stop_state(running=False)
         self._set_state_pill(running=False)
+        self._update_list_stack()
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -539,6 +568,7 @@ class LogViewerView(Gtk.Box):
             self._bucket_counts[b] = 0
         self._refresh_stat_dots()
         self._update_status_label()
+        self._update_list_stack()
 
     def _on_copy(self, _btn: Gtk.Button) -> None:
         lines = [self._format_row_for_copy(item) for item in self._selected_items()]
@@ -669,6 +699,7 @@ class LogViewerView(Gtk.Box):
         self._entries.append(entry)
         self._bucket_counts[_priority_bucket(entry.priority)] += 1
         self._refresh_stat_dots()
+        self._update_list_stack()
 
         if self._entry_matches(entry):
             row = LogRowItem(entry)
@@ -676,6 +707,24 @@ class LogViewerView(Gtk.Box):
             if self._auto_scroll:
                 GLib.idle_add(self._scroll_to_end)
             self._update_status_label()
+
+    def _update_list_stack(self) -> None:
+        """Swap between the empty Adw.StatusPage and the live list view."""
+        target = "data" if self._entries else "empty"
+        if self._list_stack.get_visible_child_name() != target:
+            self._list_stack.set_visible_child_name(target)
+        # Keep description + button in sync with running state.
+        if target == "empty":
+            if self._is_running:
+                self._empty_page.set_description(
+                    "Tailing the journal — waiting for the first entry…"
+                )
+                self._empty_start_btn.set_visible(False)
+            else:
+                self._empty_page.set_description(
+                    "Press Start above to begin tailing the system journal."
+                )
+                self._empty_start_btn.set_visible(True)
 
     def _entry_matches(self, entry: LogEntry) -> bool:
         bucket = _priority_bucket(entry.priority)
