@@ -151,13 +151,33 @@ class ProfilerView(Gtk.Stack):
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         toolbar.add_css_class("prof-toolbar")
 
-        self._start_stop_btn = Gtk.Button()
-        self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
-        self._start_stop_btn.connect("clicked", self._on_start_stop)
-        self._set_start_stop_state(running=False)
-        toolbar.append(self._start_stop_btn)
+        # Recording pill on the LEFT, in a Revealer so it fades in/out.
+        # The spacer that follows absorbs the width change, so the
+        # right-anchored action group never shifts when recording toggles.
+        self._rec_revealer = Gtk.Revealer()
+        self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
+        self._rec_revealer.set_transition_duration(180)
+        self._rec_revealer.set_reveal_child(False)
+        self._rec_revealer.set_valign(Gtk.Align.CENTER)
 
-        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        rec_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        rec_box.add_css_class("prof-rec")
+        rec_box.set_valign(Gtk.Align.CENTER)
+        dot = Gtk.Box()
+        dot.add_css_class("prof-rec-dot")
+        dot.set_valign(Gtk.Align.CENTER)
+        dot.set_halign(Gtk.Align.CENTER)
+        dot.set_size_request(8, 8)
+        rec_box.append(dot)
+        self._rec_label = Gtk.Label(label="Recording")
+        self._rec_label.set_valign(Gtk.Align.CENTER)
+        rec_box.append(self._rec_label)
+        self._rec_revealer.set_child(rec_box)
+        toolbar.append(self._rec_revealer)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        toolbar.append(spacer)
 
         self._save_btn = Gtk.Button(icon_name="document-save-symbolic")
         self._save_btn.add_css_class("flat")
@@ -179,30 +199,13 @@ class ProfilerView(Gtk.Stack):
         self._clear_btn.connect("clicked", self._on_clear)
         toolbar.append(self._clear_btn)
 
-        spacer = Gtk.Box()
-        spacer.set_hexpand(True)
-        toolbar.append(spacer)
+        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
-        # Recording pill (Revealer-controlled).
-        self._rec_revealer = Gtk.Revealer()
-        self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
-        self._rec_revealer.set_reveal_child(False)
-        self._rec_revealer.set_valign(Gtk.Align.CENTER)
-
-        rec_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        rec_box.add_css_class("prof-rec")
-        rec_box.set_valign(Gtk.Align.CENTER)
-        dot = Gtk.Box()
-        dot.add_css_class("prof-rec-dot")
-        dot.set_valign(Gtk.Align.CENTER)
-        dot.set_halign(Gtk.Align.CENTER)
-        dot.set_size_request(8, 8)
-        rec_box.append(dot)
-        self._rec_label = Gtk.Label(label="Recording")
-        self._rec_label.set_valign(Gtk.Align.CENTER)
-        rec_box.append(self._rec_label)
-        self._rec_revealer.set_child(rec_box)
-        toolbar.append(self._rec_revealer)
+        self._start_stop_btn = Gtk.Button()
+        self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
+        self._start_stop_btn.connect("clicked", self._on_start_stop)
+        self._set_start_stop_state(running=False)
+        toolbar.append(self._start_stop_btn)
 
         return toolbar
 
