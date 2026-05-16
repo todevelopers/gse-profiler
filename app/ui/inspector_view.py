@@ -431,16 +431,17 @@ class InspectorView(Gtk.Stack):
 
     def set_target_extension(self, uuid: str | None) -> None:
         """Set the extension to inspect. Resets path and auto-loads if connected."""
-        if uuid != self._current_uuid:
+        changed = uuid != self._current_uuid
+        if changed:
             self._current_uuid = uuid
             self._current_path = []
             self._update_breadcrumb()
             self._store.splice(0, self._store.get_n_items(), [])
             self._stack.set_visible_child_name("placeholder")
             self._status_lbl.set_label("")
-        self._update_visible_child()
+        self._update_visible_child(force=changed)
 
-    def _update_visible_child(self) -> None:
+    def _update_visible_child(self, force: bool = False) -> None:
         uuid = self._current_uuid
         prev = self.get_visible_child_name()
         if uuid is None:
@@ -450,7 +451,7 @@ class InspectorView(Gtk.Stack):
             self.set_visible_child_name("disabled")
             return
         self.set_visible_child_name("content")
-        if prev != "content" and self._socket.is_client_connected:
+        if (prev != "content" or force) and self._socket.is_client_connected:
             self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
             self._status_lbl.set_label("Loading…")
 
