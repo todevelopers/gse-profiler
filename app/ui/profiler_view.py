@@ -87,7 +87,7 @@ class ProfilerView(Gtk.Stack):
         self.add_named(placeholder, "placeholder")
 
         disabled = Adw.StatusPage()
-        disabled.set_icon_name("action-unavailable-symbolic")
+        disabled.set_icon_name("power-profile-performance-symbolic")
         disabled.set_title("Extension Disabled")
         disabled.set_description("Enable the extension to start profiling.")
         self.add_named(disabled, "disabled")

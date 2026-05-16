@@ -85,7 +85,7 @@ class InspectorView(Gtk.Stack):
         self.add_named(no_selection, "no-selection")
 
         disabled = Adw.StatusPage()
-        disabled.set_icon_name("action-unavailable-symbolic")
+        disabled.set_icon_name("edit-find-symbolic")
         disabled.set_title("Extension Disabled")
         disabled.set_description("Enable the extension to inspect its state object.")
         self.add_named(disabled, "disabled")
