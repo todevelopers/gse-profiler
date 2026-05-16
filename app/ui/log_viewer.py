@@ -122,12 +122,6 @@ class LogRowItem(GObject.Object):
 class LogViewerView(Gtk.Box):
     """Live journalctl log viewer with structured column-view rendering."""
 
-    __gsignals__ = {
-        # Emitted on visible-entry-count change so the host window can update
-        # a tab badge (or similar) without polling.
-        "count-changed": (GObject.SignalFlags.RUN_LAST, None, (int,)),
-    }
-
     def __init__(self, dbus_client: DBusClient) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._dbus = dbus_client
@@ -520,7 +514,6 @@ class LogViewerView(Gtk.Box):
             self._bucket_counts[b] = 0
         self._refresh_stat_dots()
         self._update_status_label()
-        self.emit("count-changed", 0)
 
     def _on_copy(self, _btn: Gtk.Button) -> None:
         lines = [self._format_row_for_copy(item) for item in self._selected_items()]
@@ -658,7 +651,6 @@ class LogViewerView(Gtk.Box):
             if self._auto_scroll:
                 GLib.idle_add(self._scroll_to_end)
             self._update_status_label()
-            self.emit("count-changed", self._store.get_n_items())
 
     def _entry_matches(self, entry: LogEntry) -> bool:
         bucket = _priority_bucket(entry.priority)
@@ -678,7 +670,6 @@ class LogViewerView(Gtk.Box):
         items = [LogRowItem(e) for e in self._entries if self._entry_matches(e)]
         self._store.splice(0, self._store.get_n_items(), items)
         self._update_status_label()
-        self.emit("count-changed", self._store.get_n_items())
         if self._auto_scroll:
             GLib.idle_add(self._scroll_to_end)
 
