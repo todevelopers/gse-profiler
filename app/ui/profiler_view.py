@@ -279,12 +279,17 @@ class ProfilerView(Gtk.Stack):
         # Functions section: header + table, in its own container for the
         # paned bottom child.
         fn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        fn_box.set_vexpand(True)
         fn_box.append(self._build_functions_header())
         fn_box.append(self._build_stats_table())
 
+        tl_panel = self._build_timeline_panel()
+        tl_panel.set_vexpand(True)
+
         # Resizable vertical paned: timeline above, functions below.
         paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
-        paned.set_start_child(self._build_timeline_panel())
+        paned.add_css_class("prof-paned")
+        paned.set_start_child(tl_panel)
         paned.set_end_child(fn_box)
         paned.set_resize_start_child(True)
         paned.set_resize_end_child(True)
