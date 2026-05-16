@@ -349,7 +349,7 @@ class LogViewerView(Gtk.Box):
         self._empty_page.set_icon_name("text-x-generic-symbolic")
         self._empty_page.set_title("No log entries yet")
         self._empty_page.set_description(
-            "Press Start above to begin tailing the system journal."
+            "Press Start to begin tailing the system journal."
         )
         self._empty_page.set_vexpand(True)
 
