@@ -138,7 +138,7 @@ class LogViewerView(Gtk.Box):
         self._uuid_filter: str | None = None
         self._selected_uuid: str | None = None
         self._filter_selected = False
-        self._solo_bucket: str | None = None
+        self._active_buckets: set[str] = set()
         self._search_text = ""
         self._auto_scroll = True
         self._is_running = False
@@ -154,8 +154,6 @@ class LogViewerView(Gtk.Box):
         # Stat dot toggle buttons keyed by bucket
         self._stat_buttons: dict[str, Gtk.ToggleButton] = {}
         self._stat_labels: dict[str, Gtk.Label] = {}
-        # Suppress toggle-handler recursion while we adjust radio behavior
-        self._suppress_stat_toggle = False
 
         settings = _load_settings()
         cmd = settings.get(_SETTINGS_KEY, _DEFAULT_CMD)
@@ -507,20 +505,10 @@ class LogViewerView(Gtk.Box):
             self._scroll_to_end()
 
     def _on_stat_dot_toggled(self, btn: Gtk.ToggleButton, bucket: str) -> None:
-        if self._suppress_stat_toggle:
-            return
-        self._suppress_stat_toggle = True
-        try:
-            if btn.get_active():
-                # Solo this bucket — deactivate any other dots
-                for other_bucket, other_btn in self._stat_buttons.items():
-                    if other_bucket != bucket and other_btn.get_active():
-                        other_btn.set_active(False)
-                self._solo_bucket = bucket
-            else:
-                self._solo_bucket = None
-        finally:
-            self._suppress_stat_toggle = False
+        if btn.get_active():
+            self._active_buckets.add(bucket)
+        else:
+            self._active_buckets.discard(bucket)
         self._rebuild_view()
 
     # ── Signal handlers — toolbar ──────────────────────────────────────────
@@ -674,7 +662,7 @@ class LogViewerView(Gtk.Box):
 
     def _entry_matches(self, entry: LogEntry) -> bool:
         bucket = _priority_bucket(entry.priority)
-        if self._solo_bucket is not None and bucket != self._solo_bucket:
+        if self._active_buckets and bucket not in self._active_buckets:
             return False
         if self._uuid_filter:
             short = self._uuid_filter.split("@")[0]
