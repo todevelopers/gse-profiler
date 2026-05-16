@@ -266,41 +266,23 @@ class ProfilerView(Gtk.Stack):
     # ── Data view (cards + timeline panel + table) ────────────────────────
 
     def _build_data_view(self) -> Gtk.Widget:
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
+
         body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         body.set_margin_start(16)
         body.set_margin_end(16)
         body.set_margin_top(14)
         body.set_margin_bottom(14)
-        body.set_vexpand(True)
 
-        # Stat cards stay anchored at the top — always visible, not in paned.
         body.append(self._build_stat_cards())
+        body.append(self._build_timeline_panel())
+        body.append(self._build_functions_header())
+        body.append(self._build_stats_table())
 
-        # Functions section: header + table, in its own container for the
-        # paned bottom child.
-        fn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        fn_box.set_vexpand(True)
-        fn_box.append(self._build_functions_header())
-        fn_box.append(self._build_stats_table())
-
-        tl_panel = self._build_timeline_panel()
-        tl_panel.set_vexpand(True)
-
-        # Resizable vertical paned: timeline above, functions below.
-        paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
-        paned.add_css_class("prof-paned")
-        paned.set_start_child(tl_panel)
-        paned.set_end_child(fn_box)
-        paned.set_resize_start_child(True)
-        paned.set_resize_end_child(True)
-        paned.set_shrink_start_child(False)
-        paned.set_shrink_end_child(False)
-        paned.set_wide_handle(True)
-        paned.set_vexpand(True)
-        paned.set_position(360)
-        body.append(paned)
-
-        return body
+        scroll.set_child(body)
+        return scroll
 
     # ── Stat cards ────────────────────────────────────────────────────────
 
@@ -442,7 +424,7 @@ class ProfilerView(Gtk.Stack):
         ):
             sw = Gtk.ScrolledWindow()
             sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            sw.set_min_content_height(180)
+            sw.set_min_content_height(360)
             sw.set_child(widget)
             self._tl_stack.add_named(sw, name)
         self._tl_stack.set_visible_child_name(self._mode)
