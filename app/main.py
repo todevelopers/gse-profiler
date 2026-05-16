@@ -127,7 +127,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._inspector_page.set_icon_name("edit-find-symbolic")
 
         logs_page = self._view_stack.add_titled(self._logs_view, "logs", "Logs")
-        logs_page.set_icon_name("folder-open-symbolic")
+        logs_page.set_icon_name("text-x-generic-symbolic")
 
         switcher = Adw.ViewSwitcher()
         switcher.set_stack(self._view_stack)
