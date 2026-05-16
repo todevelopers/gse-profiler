@@ -40,54 +40,28 @@
   padding: 2px 6px;
 }
 
-/* Type pill — small rounded badge, color encodes type.
-   min-height keeps every cell the same vertical footprint regardless
-   of whether the pill draws a background, so all rows are flush. */
+/* Type label — colored monospace text, one hue per JS type.
+   No background; the color alone identifies the type. */
 .inspector-type-pill {
   font-family: monospace;
   font-size: 11px;
   font-weight: 600;
-  padding: 0 6px;
-  border-radius: 9999px;
-  background-color: alpha(@view_fg_color, 0.08);
+  padding: 0;
+  background-color: transparent;
   min-height: 14px;
 }
 
-.inspector-type-pill.t-string {
-  color: @success_color;
-  background-color: alpha(@success_color, 0.14);
-}
-
-.inspector-type-pill.t-number {
-  color: @accent_color;
-  background-color: alpha(@accent_color, 0.14);
-}
-
-.inspector-type-pill.t-boolean {
-  color: @warning_color;
-  background-color: alpha(@warning_color, 0.14);
-}
-
-/* Use a distinct purple for object/array so they don't read as 'number'. */
-.inspector-type-pill.t-object,
-.inspector-type-pill.t-array {
-  color: #c061cb;
-  background-color: alpha(#c061cb, 0.14);
-}
-
-.inspector-type-pill.t-function,
-.inspector-type-pill.t-null,
-.inspector-type-pill.t-undefined,
-.inspector-type-pill.t-getter,
-.inspector-type-pill.t-info {
-  opacity: 0.5;
-  background-color: transparent;
-}
-
-.inspector-type-pill.t-error {
-  color: @error_color;
-  background-color: alpha(@error_color, 0.14);
-}
+.inspector-type-pill.t-string    { color: @success_color; }
+.inspector-type-pill.t-number    { color: @accent_color; }
+.inspector-type-pill.t-boolean   { color: #ed5b00; }
+.inspector-type-pill.t-object    { color: #c061cb; }
+.inspector-type-pill.t-array     { color: #d56199; }
+.inspector-type-pill.t-function  { color: #6f8396; }
+.inspector-type-pill.t-getter    { color: #2190a4; }
+.inspector-type-pill.t-null      { color: #a51d2d; }
+.inspector-type-pill.t-undefined { color: #986a44; }
+.inspector-type-pill.t-info      { color: #77767b; }
+.inspector-type-pill.t-error     { color: @error_color; }
 
 /* Drill-in chevron — reserves a fixed slot in the layout regardless of
    whether the row is drillable, so columns line up between rows. The
