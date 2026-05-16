@@ -421,16 +421,20 @@ class LogViewerView(Gtk.Box):
     # ── Command bar handlers ───────────────────────────────────────────────
 
     def _set_start_stop_state(self, running: bool) -> None:
+        icon_name = "media-playback-stop-symbolic" if running else "media-playback-start-symbolic"
+        label_text = "Stop" if running else "Start"
+
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.append(Gtk.Image.new_from_icon_name(icon_name))
+        box.append(Gtk.Label(label=label_text))
+        self._start_stop_btn.set_child(box)
+
         if running:
-            self._start_stop_btn.set_label("Stop")
-            self._start_stop_btn.set_icon_name("media-playback-stop-symbolic")
             self._start_stop_btn.remove_css_class("suggested-action")
             self._start_stop_btn.add_css_class("destructive-action")
             self._start_stop_btn.set_tooltip_text("Stop reading the journal")
             self._cmd_entry.set_sensitive(False)
         else:
-            self._start_stop_btn.set_label("Start")
-            self._start_stop_btn.set_icon_name("media-playback-start-symbolic")
             self._start_stop_btn.remove_css_class("destructive-action")
             self._start_stop_btn.add_css_class("suggested-action")
             self._start_stop_btn.set_tooltip_text("Start reading the journal")
