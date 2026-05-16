@@ -220,7 +220,7 @@ class ProfilerView(Gtk.Stack):
         page.set_icon_name("power-profile-performance-symbolic")
         page.set_title("Ready to profile")
         page.set_description(
-            "The bridge patches every function on the target extension's "
+            "The bridge extension patches every function on the target extension's "
             "stateObj and records the time spent in each."
         )
         page.set_vexpand(True)
