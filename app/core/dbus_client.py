@@ -1,4 +1,6 @@
+import json
 import logging
+import os
 from collections.abc import Callable
 from typing import Any
 
@@ -227,15 +229,32 @@ class DBusClient(GObject.Object):
 
 
 def _parse_info(uuid: str, info: dict) -> dict[str, Any]:
+    version_int = int(info.get("version", 0))
+    path = str(info.get("path", ""))
+    version_name = _read_version_name(path, version_int)
     return {
         "uuid": uuid,
         "name": str(info.get("name", uuid)),
         "description": str(info.get("description", "")),
-        "version": int(info.get("version", 0)),
+        "version": version_int,
+        "version_name": version_name,
         "state": int(info.get("state", ExtensionState.DISABLED)),
-        "path": str(info.get("path", "")),
+        "path": path,
         "error": str(info.get("error", "")),
         "url": str(info.get("url", "")),
         "type": int(info.get("type", 2)),
         "hasPrefs": bool(info.get("hasPrefs", False)),
     }
+
+
+def _read_version_name(path: str, version_int: int) -> str:
+    if version_int:
+        return str(version_int)
+    if not path:
+        return ""
+    try:
+        with open(os.path.join(path, "metadata.json"), encoding="utf-8") as f:
+            meta = json.load(f)
+        return str(meta.get("version-name") or meta.get("version") or "")
+    except Exception:
+        return ""

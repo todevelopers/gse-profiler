@@ -210,7 +210,7 @@ class DetailsView(Gtk.Stack):
     def _populate(self, uuid: str, info: dict[str, Any]) -> None:
         name = info.get("name") or uuid
         state = info.get("state", ExtensionState.DISABLED)
-        version = info.get("version", 0)
+        version_name = info.get("version_name", "")
         description = info.get("description", "")
         url = info.get("url", "")
         path = info.get("path", "")
@@ -220,7 +220,7 @@ class DetailsView(Gtk.Stack):
         self._header_row.set_subtitle(uuid)
 
         self._uuid_row.set_subtitle(uuid)
-        self._version_row.set_subtitle(str(version) if version else "—")
+        self._version_row.set_subtitle(version_name or "—")
         self._desc_row.set_subtitle(description or "—")
         self._desc_row.set_visible(True)
 
@@ -272,5 +272,5 @@ class DetailsView(Gtk.Stack):
         self._switch.set_sensitive(state not in _TRANSIENT_STATES)
         self._switch.handler_unblock_by_func(self._on_switch_toggled)
 
-        version = info.get("version", 0)
-        self._version_row.set_subtitle(str(version) if version else "—")
+        version_name = info.get("version_name", "")
+        self._version_row.set_subtitle(version_name or "—")
