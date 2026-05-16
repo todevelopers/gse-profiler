@@ -287,3 +287,228 @@ columnview.log-view > listview > row > cell {
 columnview.log-view row {
   min-height: 18px;
 }
+
+/* ── Profiler ────────────────────────────────────────────────────────── */
+
+.prof-toolbar {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 6px 14px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+}
+
+.prof-toolbar separator {
+  margin: 4px 6px;
+  background-color: alpha(@view_fg_color, 0.12);
+}
+
+/* Live recording pill in the toolbar */
+.prof-rec {
+  padding: 2px 10px 2px 8px;
+  border-radius: 9999px;
+  background-color: alpha(@error_color, 0.18);
+  color: @error_color;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.prof-rec-dot {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 9999px;
+  background-color: @error_color;
+  animation: prof-pulse 1.2s ease-in-out infinite;
+  margin-right: 6px;
+}
+
+@keyframes prof-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Section heading row (above stats table) */
+.prof-section-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.prof-section-sub {
+  font-size: 12px;
+  opacity: 0.55;
+}
+
+/* Stat cards ── 1-of-N grid above the timeline */
+.prof-stat-card {
+  background-color: @card_bg_color;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 0 0 1px alpha(@view_fg_color, 0.08);
+}
+
+.prof-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+
+.prof-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-feature-settings: "tnum";
+}
+
+.prof-stat-value.mono {
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.prof-stat-delta {
+  font-size: 11px;
+  opacity: 0.55;
+  font-feature-settings: "tnum";
+}
+
+/* Timeline panel card */
+.prof-tl-panel {
+  background-color: @card_bg_color;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px alpha(@view_fg_color, 0.08);
+}
+
+.prof-tl-head {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 8px 12px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.prof-tl-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.prof-tl-sub {
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+/* Mode tabs (Flamegraph / Swimlane / Histogram pill group) */
+.prof-tabs {
+  background-color: alpha(@view_fg_color, 0.08);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.prof-tabs button.prof-tab {
+  padding: 3px 10px;
+  min-height: 22px;
+  border-radius: 6px;
+  background-color: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+.prof-tabs button.prof-tab:hover {
+  background-color: alpha(@view_fg_color, 0.06);
+  opacity: 1;
+}
+
+.prof-tabs button.prof-tab:checked {
+  background-color: @card_bg_color;
+  box-shadow: 0 1px 2px alpha(black, 0.1), 0 0 0 1px alpha(@view_fg_color, 0.08);
+  opacity: 1;
+}
+
+/* Hover tooltip popover */
+.prof-tooltip > contents {
+  padding: 0;
+  border-radius: 8px;
+}
+
+.prof-tooltip-fn {
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.prof-tooltip-key {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.prof-tooltip-val {
+  font-size: 11px;
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  font-family: monospace;
+}
+
+/* Distribution column inside the stats table */
+.prof-bar-track {
+  background-color: alpha(@view_fg_color, 0.10);
+  border-radius: 9999px;
+  min-height: 6px;
+}
+
+.prof-bar-fill {
+  background-color: @accent_color;
+  border-radius: 9999px;
+  min-height: 6px;
+}
+
+.prof-bar-fill.warn {
+  background-color: #e5a50a;
+}
+
+.prof-bar-fill.hot {
+  background-color: @error_color;
+}
+
+/* Stats table */
+.prof-table > listview > row {
+  min-height: 28px;
+}
+
+.prof-table > listview > row > cell {
+  padding: 4px 8px;
+}
+
+.prof-table-fn {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.prof-table-num {
+  font-feature-settings: "tnum";
+  font-size: 12px;
+}
+
+/* Empty state inside the content child */
+.prof-empty {
+  padding: 60px 24px;
+}
+
+.prof-empty-icon {
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 12px;
+  background-color: alpha(@accent_color, 0.14);
+  color: @accent_color;
+}
+
+.prof-empty-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.prof-empty-sub {
+  font-size: 12px;
+  opacity: 0.65;
+}

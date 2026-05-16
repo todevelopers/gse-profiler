@@ -1,7 +1,8 @@
 import json
 import logging
 from collections.abc import Callable
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import gi
 
@@ -9,26 +10,52 @@ gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
+from app.ui.profiler.flamegraph import FlamegraphView
+from app.ui.profiler.histogram import HistogramView
+from app.ui.profiler.swimlane import SwimlaneView
 
 _log = logging.getLogger(__name__)
 
-# Bar colours per call depth (RGB, cycled).
-_DEPTH_COLORS: list[tuple[float, float, float]] = [
-    (0.22, 0.48, 0.85),
-    (0.18, 0.70, 0.42),
-    (0.85, 0.50, 0.10),
-    (0.70, 0.22, 0.55),
-    (0.55, 0.72, 0.18),
-]
+_MODES = ("flamegraph", "swimlane", "histogram")
+_MODE_LABELS: dict[str, str] = {
+    "flamegraph": "Flamegraph",
+    "swimlane": "Swimlane",
+    "histogram": "Histogram",
+}
+_DEFAULT_MODE = "swimlane"
 
-# Idle periods longer than this collapse into a visual break on the timeline.
-_GAP_THRESHOLD_S = 2.0
-# Pixel width of the collapsed-gap break drawn between segments.
-_GAP_BREAK_PX = 22
+
+def _settings_path() -> Path:
+    return Path(GLib.get_user_config_dir()) / "gse-profiler" / "profiler.json"
+
+
+def _load_settings() -> dict[str, Any]:
+    p = _settings_path()
+    if p.exists():
+        try:
+            return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_settings(data: dict[str, Any]) -> None:
+    p = _settings_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _fmt_ms(v: float) -> str:
+    if v >= 1000.0:
+        return f"{v / 1000.0:.2f} s"
+    if v >= 1.0:
+        return f"{v:.2f} ms"
+    return f"{v:.3f} ms"
 
 
 class FunctionStat(GObject.Object):
@@ -56,7 +83,7 @@ class FunctionStat(GObject.Object):
 
 
 class ProfilerView(Gtk.Stack):
-    """Live function timing profiler."""
+    """Live function timing profiler with three switchable timeline modes."""
 
     def __init__(self, dbus_client: DBusClient, socket_server: SocketServer) -> None:
         super().__init__()
@@ -66,11 +93,19 @@ class ProfilerView(Gtk.Stack):
         self._refresh_pending = False
         self._target_uuid: str | None = None
 
-        # Data model
+        # Data
         self._stats: dict[str, FunctionStat] = {}
         self._raw_events: list[dict[str, Any]] = []
+        self._selected_fn: str | None = None
+        self._filter_text: str = ""
+        self._max_total_ms: float = 1.0
 
-        self._store = Gio.ListStore(item_type=FunctionStat)
+        settings = _load_settings()
+        mode = settings.get("mode", _DEFAULT_MODE)
+        self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
+
+        self._store: Gio.ListStore = Gio.ListStore(item_type=FunctionStat)
+
         self._build_ui()
 
         socket_server.connect("message-received", self._on_message)
@@ -96,119 +131,411 @@ class ProfilerView(Gtk.Stack):
         self.add_named(content, "content")
         self.set_visible_child_name("placeholder")
 
-        # ── Toolbar ────────────────────────────────────────────────────────
-        self._start_btn = Gtk.Button(label="Start profiling")
-        self._start_btn.set_tooltip_text("Start profiling selected extension")
-        self._start_btn.add_css_class("suggested-action")
-        self._start_btn.connect("clicked", self._on_start)
+        content.append(self._build_toolbar())
 
-        self._stop_btn = Gtk.Button(label="Stop")
-        self._stop_btn.set_tooltip_text("Stop profiling")
-        self._stop_btn.add_css_class("destructive-action")
-        self._stop_btn.set_sensitive(False)
-        self._stop_btn.connect("clicked", self._on_stop)
+        # Sub-stack: empty placeholder vs. populated dashboard
+        self._inner_stack = Gtk.Stack()
+        self._inner_stack.set_vexpand(True)
+        self._inner_stack.add_named(self._build_empty_state(), "empty")
+        self._inner_stack.add_named(self._build_data_view(), "data")
+        self._inner_stack.set_visible_child_name("empty")
+        content.append(self._inner_stack)
 
-        save_btn = Gtk.Button()
-        save_btn.set_icon_name("document-save-symbolic")
-        save_btn.set_tooltip_text("Save profile to JSON file")
-        save_btn.connect("clicked", self._on_save)
+    # ── Toolbar ───────────────────────────────────────────────────────────
+
+    def _build_toolbar(self) -> Gtk.Box:
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        toolbar.add_css_class("prof-toolbar")
+
+        self._start_stop_btn = Gtk.Button()
+        self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
+        self._start_stop_btn.connect("clicked", self._on_start_stop)
+        self._set_start_stop_state(running=False)
+        toolbar.append(self._start_stop_btn)
+
+        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+
+        self._save_btn = Gtk.Button(icon_name="document-save-symbolic")
+        self._save_btn.add_css_class("flat")
+        self._save_btn.set_tooltip_text("Save profile to JSON file")
+        self._save_btn.set_sensitive(False)
+        self._save_btn.connect("clicked", self._on_save)
+        toolbar.append(self._save_btn)
+
+        self._load_btn = Gtk.Button(icon_name="document-open-symbolic")
+        self._load_btn.add_css_class("flat")
+        self._load_btn.set_tooltip_text("Load profile from JSON file")
+        self._load_btn.connect("clicked", self._on_load)
+        toolbar.append(self._load_btn)
+
+        self._clear_btn = Gtk.Button(icon_name="edit-clear-symbolic")
+        self._clear_btn.add_css_class("flat")
+        self._clear_btn.set_tooltip_text("Clear all profiling data")
+        self._clear_btn.set_sensitive(False)
+        self._clear_btn.connect("clicked", self._on_clear)
+        toolbar.append(self._clear_btn)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        toolbar.append(spacer)
+
+        # Recording pill (Revealer-controlled).
+        self._rec_revealer = Gtk.Revealer()
+        self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
+        self._rec_revealer.set_reveal_child(False)
+
+        rec_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        rec_box.add_css_class("prof-rec")
+        dot = Gtk.Box()
+        dot.add_css_class("prof-rec-dot")
+        rec_box.append(dot)
+        self._rec_label = Gtk.Label(label="Recording")
+        rec_box.append(self._rec_label)
+        self._rec_revealer.set_child(rec_box)
+        toolbar.append(self._rec_revealer)
+
+        return toolbar
+
+    def _set_start_stop_state(self, running: bool) -> None:
+        icon_name = "media-playback-stop-symbolic" if running else "media-playback-start-symbolic"
+        label_text = "Stop" if running else "Start"
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        box.append(Gtk.Image.new_from_icon_name(icon_name))
+        box.append(Gtk.Label(label=label_text))
+        self._start_stop_btn.set_child(box)
+
+        if running:
+            self._start_stop_btn.remove_css_class("suggested-action")
+            self._start_stop_btn.add_css_class("destructive-action")
+            self._start_stop_btn.set_tooltip_text("Stop profiling")
+        else:
+            self._start_stop_btn.remove_css_class("destructive-action")
+            self._start_stop_btn.add_css_class("suggested-action")
+            self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
+
+    # ── Empty state (inside content) ──────────────────────────────────────
+
+    def _build_empty_state(self) -> Gtk.Widget:
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        outer.set_valign(Gtk.Align.CENTER)
+        outer.set_halign(Gtk.Align.CENTER)
+        outer.set_vexpand(True)
+        outer.add_css_class("prof-empty")
+        outer.set_spacing(8)
+
+        icon_wrap = Gtk.Box()
+        icon_wrap.add_css_class("prof-empty-icon")
+        icon_wrap.set_halign(Gtk.Align.CENTER)
+        icon_wrap.set_valign(Gtk.Align.CENTER)
+        icon = Gtk.Image.new_from_icon_name("media-playback-start-symbolic")
+        icon.set_pixel_size(28)
+        icon.set_halign(Gtk.Align.CENTER)
+        icon.set_valign(Gtk.Align.CENTER)
+        icon_wrap.append(icon)
+        outer.append(icon_wrap)
+
+        title = Gtk.Label(label="Ready to profile")
+        title.add_css_class("prof-empty-title")
+        outer.append(title)
+
+        sub = Gtk.Label(
+            label="The bridge patches every function on the target extension's "
+                  "stateObj and records the time spent in each."
+        )
+        sub.set_wrap(True)
+        sub.set_justify(Gtk.Justification.CENTER)
+        sub.set_max_width_chars(48)
+        sub.add_css_class("prof-empty-sub")
+        outer.append(sub)
+
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions.set_halign(Gtk.Align.CENTER)
+        actions.set_margin_top(8)
+
+        start_btn = Gtk.Button()
+        start_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        start_box.append(Gtk.Image.new_from_icon_name("media-playback-start-symbolic"))
+        start_box.append(Gtk.Label(label="Start"))
+        start_btn.set_child(start_box)
+        start_btn.add_css_class("suggested-action")
+        start_btn.connect("clicked", self._on_start_stop)
+        actions.append(start_btn)
 
         load_btn = Gtk.Button()
-        load_btn.set_icon_name("document-open-symbolic")
-        load_btn.set_tooltip_text("Load profile from JSON file")
+        load_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        load_box.append(Gtk.Image.new_from_icon_name("document-open-symbolic"))
+        load_box.append(Gtk.Label(label="Load profile…"))
+        load_btn.set_child(load_box)
         load_btn.connect("clicked", self._on_load)
+        actions.append(load_btn)
 
-        clear_btn = Gtk.Button()
-        clear_btn.set_icon_name("edit-clear-symbolic")
-        clear_btn.set_tooltip_text("Clear all profiling data")
-        clear_btn.connect("clicked", self._on_clear)
+        outer.append(actions)
+        return outer
 
-        sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        sep.set_margin_start(4)
-        sep.set_margin_end(4)
+    # ── Data view (cards + timeline panel + table) ────────────────────────
 
-        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        toolbar.set_margin_start(6)
-        toolbar.set_margin_end(6)
-        toolbar.set_margin_top(6)
-        toolbar.set_margin_bottom(6)
-        toolbar.append(self._start_btn)
-        toolbar.append(self._stop_btn)
-        toolbar.append(sep)
-        toolbar.append(save_btn)
-        toolbar.append(load_btn)
-        toolbar.append(clear_btn)
+    def _build_data_view(self) -> Gtk.Widget:
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_vexpand(True)
 
-        # ── Call table (GtkColumnView) ─────────────────────────────────────
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        body.set_margin_start(16)
+        body.set_margin_end(16)
+        body.set_margin_top(14)
+        body.set_margin_bottom(14)
+
+        body.append(self._build_stat_cards())
+        body.append(self._build_timeline_panel())
+        body.append(self._build_functions_header())
+        body.append(self._build_stats_table())
+
+        scroll.set_child(body)
+        return scroll
+
+    # ── Stat cards ────────────────────────────────────────────────────────
+
+    def _build_stat_cards(self) -> Gtk.Widget:
+        cards = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        cards.set_homogeneous(True)
+
+        def _card() -> tuple[Gtk.Box, Gtk.Label, Gtk.Label, Gtk.Label]:
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            card.add_css_class("prof-stat-card")
+            card.set_hexpand(True)
+            label = Gtk.Label(xalign=0.0)
+            label.add_css_class("prof-stat-label")
+            value = Gtk.Label(xalign=0.0)
+            value.add_css_class("prof-stat-value")
+            value.set_ellipsize(Pango.EllipsizeMode.END)
+            delta = Gtk.Label(xalign=0.0)
+            delta.add_css_class("prof-stat-delta")
+            delta.set_ellipsize(Pango.EllipsizeMode.END)
+            card.append(label)
+            card.append(value)
+            card.append(delta)
+            return card, label, value, delta
+
+        c1, l1, v1, d1 = _card()
+        l1.set_text("Total calls")
+        self._card_calls_value, self._card_calls_sub = v1, d1
+        cards.append(c1)
+
+        c2, l2, v2, d2 = _card()
+        l2.set_text("Wall time")
+        self._card_wall_value, self._card_wall_sub = v2, d2
+        cards.append(c2)
+
+        c3, l3, v3, d3 = _card()
+        l3.set_text("Hottest function")
+        v3.add_css_class("mono")
+        self._card_hot_value, self._card_hot_sub = v3, d3
+        cards.append(c3)
+
+        c4, l4, v4, d4 = _card()
+        l4.set_text("Max call")
+        self._card_max_value, self._card_max_sub = v4, d4
+        cards.append(c4)
+
+        # Initialise to "no data" placeholders.
+        self._update_stat_cards()
+        return cards
+
+    def _update_stat_cards(self) -> None:
+        n_calls = sum(s.count for s in self._stats.values())
+        wall_ms = sum(s.total_ms for s in self._stats.values())
+        self._card_calls_value.set_text(f"{n_calls:,}".replace(",", " "))
+        self._card_calls_sub.set_text(f"across {len(self._stats)} functions")
+
+        self._card_wall_value.set_text(_fmt_ms(wall_ms))
+        self._card_wall_sub.set_text("sum of all invocations")
+
+        if self._stats:
+            hot = max(self._stats.values(), key=lambda s: s.total_ms)
+            self._card_hot_value.set_text(hot.name)
+            self._card_hot_value.set_tooltip_text(hot.name)
+            self._card_hot_sub.set_text(f"{_fmt_ms(hot.total_ms)} · {hot.count} calls")
+
+            worst = max(self._stats.values(), key=lambda s: s.max_ms)
+            self._card_max_value.set_text(_fmt_ms(worst.max_ms))
+            self._card_max_sub.set_text(worst.name)
+            self._card_max_sub.set_tooltip_text(worst.name)
+        else:
+            self._card_hot_value.set_text("—")
+            self._card_hot_sub.set_text("no data")
+            self._card_max_value.set_text("—")
+            self._card_max_sub.set_text("no data")
+
+    # ── Timeline panel (3 modes) ──────────────────────────────────────────
+
+    def _build_timeline_panel(self) -> Gtk.Widget:
+        frame = Gtk.Frame()
+        frame.add_css_class("prof-tl-panel")
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        frame.set_child(outer)
+
+        # Header row
+        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        head.add_css_class("prof-tl-head")
+
+        title = Gtk.Label(label="Timeline")
+        title.set_xalign(0.0)
+        title.add_css_class("prof-tl-title")
+        head.append(title)
+
+        self._tl_caption = Gtk.Label(xalign=0.0)
+        self._tl_caption.add_css_class("prof-tl-sub")
+        head.append(self._tl_caption)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        head.append(spacer)
+
+        # Mode tabs — three ToggleButtons grouped so exactly one is active.
+        tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        tabs.add_css_class("prof-tabs")
+        self._mode_btns: dict[str, Gtk.ToggleButton] = {}
+        group_anchor: Gtk.ToggleButton | None = None
+        for m in _MODES:
+            btn = Gtk.ToggleButton(label=_MODE_LABELS[m])
+            btn.add_css_class("prof-tab")
+            if group_anchor is None:
+                group_anchor = btn
+            else:
+                btn.set_group(group_anchor)
+            if m == self._mode:
+                btn.set_active(True)
+            btn.connect("toggled", self._on_mode_toggled, m)
+            self._mode_btns[m] = btn
+            tabs.append(btn)
+        head.append(tabs)
+
+        outer.append(head)
+
+        # Stack of three views, each in its own scrolled window.
+        self._tl_stack = Gtk.Stack()
+        self._tl_stack.set_vexpand(True)
+        self._tl_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self._tl_stack.set_transition_duration(120)
+
+        self._flamegraph = FlamegraphView()
+        self._flamegraph.connect("function-selected", self._on_graph_selected)
+        self._swimlane = SwimlaneView()
+        self._swimlane.connect("function-selected", self._on_graph_selected)
+        self._histogram = HistogramView()
+        self._histogram.connect("function-selected", self._on_graph_selected)
+
+        for name, widget in (
+            ("flamegraph", self._flamegraph),
+            ("swimlane", self._swimlane),
+            ("histogram", self._histogram),
+        ):
+            sw = Gtk.ScrolledWindow()
+            sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+            sw.set_min_content_height(180)
+            sw.set_child(widget)
+            self._tl_stack.add_named(sw, name)
+        self._tl_stack.set_visible_child_name(self._mode)
+
+        outer.append(self._tl_stack)
+        return frame
+
+    def _on_mode_toggled(self, btn: Gtk.ToggleButton, mode: str) -> None:
+        if not btn.get_active():
+            return
+        if mode == self._mode:
+            return
+        self._mode = mode
+        self._tl_stack.set_visible_child_name(mode)
+        _save_settings({"mode": mode})
+        self._update_active_graph()
+
+    # ── Functions section header (filter search) ─────────────────────────
+
+    def _build_functions_header(self) -> Gtk.Widget:
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.set_margin_top(4)
+
+        title = Gtk.Label(label="Functions")
+        title.set_xalign(0.0)
+        title.add_css_class("prof-section-title")
+        box.append(title)
+
+        self._fn_caption = Gtk.Label(xalign=0.0)
+        self._fn_caption.add_css_class("prof-section-sub")
+        box.append(self._fn_caption)
+
+        spacer = Gtk.Box()
+        spacer.set_hexpand(True)
+        box.append(spacer)
+
+        self._filter_entry = Gtk.SearchEntry()
+        self._filter_entry.set_placeholder_text("Filter functions")
+        self._filter_entry.set_width_chars(20)
+        self._filter_entry.connect("search-changed", self._on_filter_changed)
+        box.append(self._filter_entry)
+        return box
+
+    # ── Stats table ───────────────────────────────────────────────────────
+
+    def _build_stats_table(self) -> Gtk.Widget:
         sort_model = Gtk.SortListModel(model=self._store)
         selection = Gtk.SingleSelection(model=sort_model)
+        selection.set_autoselect(False)
+        selection.set_can_unselect(True)
+        selection.set_selected(Gtk.INVALID_LIST_POSITION)
+        # Feedback-loop guard for graph→table syncs.
+        self._table_sync = False
+        selection.connect("selection-changed", self._on_table_selection_changed)
+
         col_view = Gtk.ColumnView(model=selection)
-        col_view.set_show_column_separators(True)
+        col_view.set_show_column_separators(False)
         col_view.set_show_row_separators(True)
         col_view.set_vexpand(True)
+        col_view.add_css_class("prof-table")
         sort_model.set_sorter(col_view.get_sorter())
 
-        col_view.append_column(self._make_col("Function", "name", str, expand=True))
-        col_view.append_column(self._make_col("Calls", "count", str))
-        col_view.append_column(self._make_col("Total ms", "total_ms", lambda v: f"{v:.3f}"))
-        col_view.append_column(self._make_col("Self ms", "self_ms", lambda v: f"{v:.3f}"))
-        col_view.append_column(self._make_col("Avg ms", "avg_ms", lambda v: f"{v:.3f}"))
-        col_view.append_column(self._make_col("Max ms", "max_ms", lambda v: f"{v:.3f}"))
+        col_view.append_column(self._make_text_col("Function", "name", str, expand=True, mono=True))
+        col_view.append_column(self._make_distribution_col())
+        col_view.append_column(self._make_text_col("Calls", "count", str))
+        col_view.append_column(self._make_text_col("Total", "total_ms", _fmt_ms))
+        col_view.append_column(self._make_text_col("Self", "self_ms", _fmt_ms))
+        col_view.append_column(self._make_text_col("Avg", "avg_ms", _fmt_ms))
+        col_view.append_column(self._make_text_col("Max", "max_ms", _fmt_ms))
 
-        table_scroll = Gtk.ScrolledWindow()
-        table_scroll.set_vexpand(True)
-        table_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        table_scroll.set_child(col_view)
+        # Default sort: Total desc.
+        col_view.sort_by_column(col_view.get_columns().get_item(3), Gtk.SortType.DESCENDING)
 
-        # ── Timeline (DrawingArea) ─────────────────────────────────────────
-        self._timeline = Gtk.DrawingArea()
-        self._timeline.set_draw_func(self._draw_timeline)
-        self._timeline.set_content_height(120)
-        self._timeline.set_hexpand(True)
+        self._selection = selection
+        self._col_view = col_view
+        self._sort_model = sort_model
 
-        timeline_scroll = Gtk.ScrolledWindow()
-        timeline_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        timeline_scroll.set_min_content_height(120)
-        timeline_scroll.set_vexpand(True)
-        timeline_scroll.set_child(self._timeline)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        scroll.set_min_content_height(180)
+        scroll.set_child(col_view)
 
-        tl_label = Gtk.Label(label="Timeline")
-        tl_label.set_xalign(0.0)
-        tl_label.set_margin_start(6)
-        tl_label.set_margin_top(6)
-        tl_label.add_css_class("heading")
+        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        wrap.set_vexpand(True)
+        wrap.append(scroll)
+        return wrap
 
-        timeline_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        timeline_box.set_vexpand(True)
-        timeline_box.append(tl_label)
-        timeline_box.append(timeline_scroll)
+    # Column helpers ──────────────────────────────────────────────────────
 
-        # ── Paned split ────────────────────────────────────────────────────
-        paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
-        paned.set_start_child(table_scroll)
-        paned.set_end_child(timeline_box)
-        paned.set_resize_start_child(True)
-        paned.set_resize_end_child(True)
-        paned.set_position(300)
-        paned.set_vexpand(True)
-
-        content.append(toolbar)
-        content.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        content.append(paned)
-
-    # ── Column helpers ─────────────────────────────────────────────────────
-
-    def _make_col(
+    def _make_text_col(
         self,
         title: str,
         attr: str,
         fmt: Callable[..., str] = str,
         *,
         expand: bool = False,
+        mono: bool = False,
+        default_sort_desc: bool = False,
     ) -> Gtk.ColumnViewColumn:
         factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self._col_setup, attr)
-        factory.connect("bind", self._col_bind, attr, fmt)
+        factory.connect("setup", self._text_setup, attr, mono)
+        factory.connect("bind", self._text_bind, attr, fmt)
 
         sorter = Gtk.CustomSorter.new(self._sorter_func, attr)
         col = Gtk.ColumnViewColumn(title=title, factory=factory, sorter=sorter)
@@ -216,26 +543,32 @@ class ProfilerView(Gtk.Stack):
         return col
 
     @staticmethod
-    def _col_setup(
+    def _text_setup(
         _factory: Gtk.SignalListItemFactory,
         item: Gtk.ListItem,
         attr: str,
+        mono: bool,
     ) -> None:
         label = Gtk.Label()
         label.set_xalign(0.0 if attr == "name" else 1.0)
-        label.set_margin_start(4)
-        label.set_margin_end(4)
+        label.set_margin_start(6)
+        label.set_margin_end(6)
+        if mono:
+            label.add_css_class("prof-table-fn")
+            label.set_ellipsize(Pango.EllipsizeMode.END)
+        else:
+            label.add_css_class("prof-table-num")
         item.set_child(label)
 
     @staticmethod
-    def _col_bind(
+    def _text_bind(
         _factory: Gtk.SignalListItemFactory,
         item: Gtk.ListItem,
         attr: str,
         fmt: Callable[..., str],
     ) -> None:
         stat: FunctionStat = item.get_item()
-        label: Gtk.Label = item.get_child()  # type: ignore[assignment]
+        label: Gtk.Label = item.get_child()
         label.set_text(fmt(getattr(stat, attr)))
 
     @staticmethod
@@ -248,192 +581,88 @@ class ProfilerView(Gtk.Stack):
             return 1
         return 0
 
-    # ── Timeline drawing ───────────────────────────────────────────────────
+    # Distribution column — two overlapping bars in a Cairo cell ──────────
 
-    def _visible_segments(self) -> list[tuple[float, float]]:
-        """Return active-time segments separated by collapsed idle gaps.
+    def _make_distribution_col(self) -> Gtk.ColumnViewColumn:
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._dist_setup)
+        factory.connect("bind", self._dist_bind)
+        col = Gtk.ColumnViewColumn(title="Distribution", factory=factory)
+        col.set_fixed_width(180)
+        col.set_resizable(True)
+        return col
 
-        Iterates events in start-order, tracking the running max end-time
-        seen so far. A segment closes when the next event's start is more
-        than ``_GAP_THRESHOLD_S`` past that max — this correctly handles
-        long-running parents whose end time follows several shorter
-        children in start-order.
-        """
-        if not self._raw_events:
-            return []
-        ordered = sorted(self._raw_events, key=lambda e: e["start"])
-        segments: list[tuple[float, float]] = []
-        seg_start = ordered[0]["start"]
-        running_end = ordered[0]["end"]
-        for e in ordered[1:]:
-            if e["start"] - running_end > _GAP_THRESHOLD_S:
-                segments.append((seg_start, running_end))
-                seg_start = e["start"]
-                running_end = e["end"]
-            else:
-                if e["end"] > running_end:
-                    running_end = e["end"]
-        segments.append((seg_start, running_end))
-        return segments
+    def _dist_setup(self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
+        area = Gtk.DrawingArea()
+        area.set_content_height(12)
+        area.set_hexpand(True)
+        area.set_valign(Gtk.Align.CENTER)
+        area.set_margin_start(8)
+        area.set_margin_end(8)
+        # Defaults; bind() overwrites.
+        area._pct_total = 0.0  # type: ignore[attr-defined]
+        area._pct_self = 0.0  # type: ignore[attr-defined]
+        area.set_draw_func(self._dist_draw)
+        item.set_child(area)
+
+    def _dist_bind(self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
+        stat: FunctionStat = item.get_item()
+        area: Gtk.DrawingArea = item.get_child()
+        max_total = max(self._max_total_ms, 1e-9)
+        area._pct_total = min(stat.total_ms / max_total, 1.0)  # type: ignore[attr-defined]
+        area._pct_self = min(stat.self_ms / max_total, 1.0)  # type: ignore[attr-defined]
+        area.queue_draw()
 
     @staticmethod
-    def _format_gap(seconds: float) -> str:
-        if seconds < 1.0:
-            return f"+{seconds * 1000:.0f}ms"
-        if seconds < 60.0:
-            return f"+{seconds:.1f}s"
-        return f"+{seconds / 60:.1f}m"
+    def _dist_draw(area: Gtk.DrawingArea, cr: Any, width: int, height: int) -> None:
+        pct_total = getattr(area, "_pct_total", 0.0)
+        pct_self = getattr(area, "_pct_self", 0.0)
 
-    def _draw_timeline(
-        self,
-        _area: Gtk.DrawingArea,
-        cr: Any,
-        width: int,
-        _height: int,
-    ) -> None:
         dark = Adw.StyleManager.get_default().get_dark()
-        if dark:
-            c_bg       = (0.12, 0.12, 0.15)
-            c_row_alt  = (0.18, 0.18, 0.23)
-            c_text     = (0.88, 0.88, 0.88)
-            c_tick     = (0.55, 0.55, 0.55)
-            c_gap_bg   = (0.08, 0.08, 0.10)
+        track = (0.55, 0.55, 0.60, 0.18) if dark else (0.10, 0.10, 0.12, 0.10)
+        is_hot = pct_total > 0.7
+        is_warm = pct_total > 0.4
+        if is_hot:
+            base = (0.90, 0.18, 0.20)  # error red
+        elif is_warm:
+            base = (0.90, 0.65, 0.04)  # warning amber
         else:
-            c_bg       = (0.96, 0.96, 0.97)
-            c_row_alt  = (0.90, 0.90, 0.95)
-            c_text     = (0.12, 0.12, 0.12)
-            c_tick     = (0.35, 0.35, 0.35)
-            c_gap_bg   = (0.82, 0.82, 0.84)
+            base = (0.21, 0.52, 0.89)  # accent blue
 
-        if not self._raw_events:
-            cr.set_source_rgb(*c_tick)
-            cr.select_font_face("sans", 0, 0)
-            cr.set_font_size(12)
-            text = "No profiling data — start profiling to see the timeline"
-            extents = cr.text_extents(text)
-            cr.move_to((width - extents[2]) / 2, 60)
-            cr.show_text(text)
+        bar_h = 6
+        y = (height - bar_h) / 2
+        # Track
+        cr.set_source_rgba(*track)
+        cr.rectangle(0, y, width, bar_h)
+        cr.fill()
+        # Total fill (lighter)
+        cr.set_source_rgba(*base, 0.35)
+        cr.rectangle(0, y, width * pct_total, bar_h)
+        cr.fill()
+        # Self overlay (full saturation)
+        cr.set_source_rgba(*base, 1.0)
+        cr.rectangle(0, y, width * pct_self, bar_h)
+        cr.fill()
+
+    # Table selection handler ─────────────────────────────────────────────
+
+    def _on_table_selection_changed(
+        self,
+        sel: Gtk.SingleSelection,
+        _position: int,
+        _n_items: int,
+    ) -> None:
+        if self._table_sync:
             return
+        if sel.get_selected() == Gtk.INVALID_LIST_POSITION:
+            self._apply_selected_fn(None, sync_table=False)
+            return
+        item = sel.get_selected_item()
+        if item is None:
+            return
+        self._apply_selected_fn(item.name, sync_table=False)
 
-        segments = self._visible_segments()
-        active_total = sum(e - s for s, e in segments) or 1e-9
-        n_breaks = len(segments) - 1
-
-        # Unique function names in order of first appearance.
-        seen: dict[str, int] = {}
-        for e in self._raw_events:
-            fn = e["function"]
-            if fn not in seen:
-                seen[fn] = len(seen)
-
-        LABEL_W = 160
-        ROW_H = 22
-        PAD_TOP = 18  # space for time axis labels
-        PAD_BOT = 4
-        chart_w = max(width - LABEL_W - 4, 1)
-        seg_total_px = max(chart_w - n_breaks * _GAP_BREAK_PX, 10)
-        needed_h = PAD_TOP + len(seen) * ROW_H + PAD_BOT
-
-        # Expand drawing area to fit all rows.
-        self._timeline.set_content_height(max(needed_h, 120))
-
-        # Lay out each segment in display space: (seg_start, seg_end, x0, w_px).
-        seg_layout: list[tuple[float, float, float, float]] = []
-        x_cursor = float(LABEL_W)
-        for seg_s, seg_e in segments:
-            seg_w_px = (seg_e - seg_s) / active_total * seg_total_px
-            seg_layout.append((seg_s, seg_e, x_cursor, seg_w_px))
-            x_cursor += seg_w_px + _GAP_BREAK_PX
-
-        cr.select_font_face("monospace", 0, 0)
-        cr.set_font_size(10)
-
-        # Background.
-        cr.set_source_rgb(*c_bg)
-        cr.paint()
-
-        # Alternating row backgrounds and function labels.
-        for fn, row in seen.items():
-            y = PAD_TOP + row * ROW_H
-            if row % 2 == 0:
-                cr.set_source_rgb(*c_row_alt)
-                cr.rectangle(0, y, width, ROW_H)
-                cr.fill()
-            label = fn if len(fn) <= 23 else f"…{fn[-22:]}"
-            cr.set_source_rgb(*c_text)
-            cr.move_to(4, y + ROW_H - 5)
-            cr.show_text(label)
-
-        # Shade the collapsed-gap "break" columns.
-        for i in range(n_breaks):
-            _, _, x0_prev, w_prev = seg_layout[i]
-            break_x = x0_prev + w_prev
-            cr.set_source_rgb(*c_gap_bg)
-            cr.rectangle(break_x, PAD_TOP, _GAP_BREAK_PX, needed_h - PAD_TOP - PAD_BOT)
-            cr.fill()
-
-        # Event bars — split across every segment they overlap.
-        for e in self._raw_events:
-            row = seen[e["function"]]
-            y = PAD_TOP + row * ROW_H + 3
-            r, g, b = _DEPTH_COLORS[e.get("depth", 0) % len(_DEPTH_COLORS)]
-            cr.set_source_rgba(r, g, b, 0.82)
-            for seg_s, seg_e, x0, w in seg_layout:
-                if e["end"] <= seg_s or e["start"] >= seg_e:
-                    continue
-                seg_dur = seg_e - seg_s
-                if seg_dur <= 0 or w <= 0:
-                    continue
-                piece_s = max(e["start"], seg_s)
-                piece_e = min(e["end"], seg_e)
-                x = x0 + (piece_s - seg_s) / seg_dur * w
-                bar_w = max((piece_e - piece_s) / seg_dur * w, 2.0)
-                cr.rectangle(x, y, bar_w, ROW_H - 6)
-                cr.fill()
-
-        # Segment-break visuals: two dashed verticals + gap-duration label.
-        cr.set_source_rgb(*c_tick)
-        cr.set_line_width(1.0)
-        for i in range(n_breaks):
-            _, prev_end, x0_prev, w_prev = seg_layout[i]
-            next_start = seg_layout[i + 1][0]
-            break_x = x0_prev + w_prev
-            cr.set_dash([3, 3])
-            for dx in (3, _GAP_BREAK_PX - 3):
-                cr.move_to(break_x + dx, PAD_TOP)
-                cr.line_to(break_x + dx, needed_h - PAD_BOT)
-                cr.stroke()
-            cr.set_dash([])
-            gap_label = self._format_gap(next_start - prev_end)
-            cr.set_font_size(9)
-            ext = cr.text_extents(gap_label)
-            cr.move_to(break_x + (_GAP_BREAK_PX - ext[2]) / 2, PAD_TOP - 4)
-            cr.show_text(gap_label)
-            cr.set_font_size(10)
-
-        # Time axis: per-segment start/end labels (relative to overall start).
-        t0 = segments[0][0]
-        cr.set_source_rgb(*c_tick)
-        cr.set_line_width(0.5)
-        for seg_s, seg_e, x0, w in seg_layout:
-            for frac, t_real in ((0.0, seg_s), (1.0, seg_e)):
-                x = x0 + frac * w
-                cr.move_to(x, PAD_TOP - 1)
-                cr.line_to(x, needed_h - PAD_BOT)
-                cr.stroke()
-                t_ms = (t_real - t0) * 1000.0
-                # Skip the end tick of one segment when the next starts very
-                # close on screen — only the gap-break draws between them.
-                label = f"{t_ms:.1f}ms"
-                ext = cr.text_extents(label)
-                # Right-align end labels so they don't overflow the segment.
-                lx = x + 2 if frac == 0.0 else x - ext[2] - 2
-                cr.move_to(lx, PAD_TOP - 4)
-                cr.show_text(label)
-
-    # ── Signal handlers ────────────────────────────────────────────────────
-
-    # ── Public API ─────────────────────────────────────────────────────────
+    # ── Public API ────────────────────────────────────────────────────────
 
     def set_target_extension(self, uuid: str | None) -> None:
         """Set the extension to profile. Stops ongoing profiling if UUID changes."""
@@ -447,17 +676,17 @@ class ProfilerView(Gtk.Stack):
         uuid = self._target_uuid
         if uuid is None:
             self.set_visible_child_name("placeholder")
-            self._start_btn.set_sensitive(False)
+            self._start_stop_btn.set_sensitive(False)
             return
         if self._dbus.get_extension_state(uuid) != ExtensionState.ENABLED:
             if self._profiling:
                 self._socket.send({"type": "stop_profiling"})
                 self._set_stopped()
             self.set_visible_child_name("disabled")
-            self._start_btn.set_sensitive(False)
+            self._start_stop_btn.set_sensitive(False)
             return
         self.set_visible_child_name("content")
-        self._start_btn.set_sensitive(not self._profiling)
+        self._start_stop_btn.set_sensitive(True)
 
     def _on_extensions_changed(
         self, _dbus: DBusClient, _extensions: dict[str, Any]
@@ -465,32 +694,39 @@ class ProfilerView(Gtk.Stack):
         if self._target_uuid is not None:
             self._update_visible_child()
 
-    # ── Button handlers ────────────────────────────────────────────────────
+    # ── Button handlers ───────────────────────────────────────────────────
 
-    def _on_start(self, _btn: Gtk.Button) -> None:
-        uuid = self._target_uuid
-        _log.debug("Start clicked — uuid=%r connected=%s", uuid, self._socket.is_client_connected)
-        if not uuid:
-            _log.warning("Start clicked but no target extension set")
-            return
-        self._socket.send({"type": "start_profiling", "uuid": uuid})
-        self._profiling = True
-        self._start_btn.set_sensitive(False)
-        self._stop_btn.set_sensitive(True)
-
-    def _on_stop(self, _btn: Gtk.Button) -> None:
-        _log.debug("Stop clicked")
-        self._socket.send({"type": "stop_profiling"})
-        self._set_stopped()
+    def _on_start_stop(self, _btn: Gtk.Button) -> None:
+        if self._profiling:
+            self._socket.send({"type": "stop_profiling"})
+            self._set_stopped()
+        else:
+            uuid = self._target_uuid
+            _log.debug("Start clicked — uuid=%r connected=%s", uuid, self._socket.is_client_connected)
+            if not uuid:
+                _log.warning("Start clicked but no target extension set")
+                return
+            self._socket.send({"type": "start_profiling", "uuid": uuid})
+            self._profiling = True
+            self._set_start_stop_state(running=True)
+            self._update_recording_pill()
 
     def _set_stopped(self) -> None:
         self._profiling = False
+        self._set_start_stop_state(running=False)
+        self._update_recording_pill()
         enabled = (
             self._target_uuid is not None
             and self._dbus.get_extension_state(self._target_uuid) == ExtensionState.ENABLED
         )
-        self._start_btn.set_sensitive(enabled)
-        self._stop_btn.set_sensitive(False)
+        self._start_stop_btn.set_sensitive(enabled)
+
+    def _update_recording_pill(self) -> None:
+        if self._profiling:
+            self._rec_label.set_text(f" Recording · {len(self._raw_events)} events")
+            self._rec_revealer.set_reveal_child(True)
+        else:
+            self._rec_revealer.set_reveal_child(False)
 
     def _on_save(self, _btn: Gtk.Button) -> None:
         from datetime import datetime
@@ -520,6 +756,7 @@ class ProfilerView(Gtk.Stack):
                 name: {
                     "count": s.count,
                     "total_ms": s.total_ms,
+                    "self_ms": s.self_ms,
                     "max_ms": s.max_ms,
                 }
                 for name, s in self._stats.items()
@@ -571,15 +808,61 @@ class ProfilerView(Gtk.Stack):
         self._clear_data()
         self._flush_refresh()
 
+    # ── Filter / selection wiring ─────────────────────────────────────────
+
+    def _on_filter_changed(self, entry: Gtk.SearchEntry) -> None:
+        self._filter_text = entry.get_text().strip().lower()
+        self._flamegraph.set_filter_text(self._filter_text)
+        self._swimlane.set_filter_text(self._filter_text)
+        self._histogram.set_filter_text(self._filter_text)
+        # Re-splice the store with current filter.
+        self._refresh_table_only()
+
+    def _on_graph_selected(self, _graph: Gtk.Widget, fn: str) -> None:
+        new = fn if fn else None
+        self._apply_selected_fn(new, sync_table=True)
+
+    def _apply_selected_fn(self, fn: str | None, *, sync_table: bool) -> None:
+        self._selected_fn = fn
+        self._flamegraph.set_selected_fn(fn)
+        self._swimlane.set_selected_fn(fn)
+        self._histogram.set_selected_fn(fn)
+        if sync_table:
+            self._sync_table_selection(fn)
+
+    def _sync_table_selection(self, fn: str | None) -> None:
+        pos = Gtk.INVALID_LIST_POSITION
+        if fn is not None:
+            n = self._sort_model.get_n_items()
+            for i in range(n):
+                item: FunctionStat = self._sort_model.get_item(i)
+                if item is not None and item.name == fn:
+                    pos = i
+                    break
+        self._table_sync = True
+        try:
+            self._selection.set_selected(pos)
+        finally:
+            self._table_sync = False
+
+    # ── Socket handlers ───────────────────────────────────────────────────
+
     def _on_message(self, _server: SocketServer, msg: dict[str, Any]) -> None:
         msg_type = msg.get("type")
         if msg_type == "profile_event":
-            _log.debug("profile_event: fn=%s dur=%.3fms", msg.get("function"), (msg.get("end", 0) - msg.get("start", 0)) * 1000)
+            _log.debug(
+                "profile_event: fn=%s dur=%.3fms",
+                msg.get("function"),
+                (msg.get("end", 0) - msg.get("start", 0)) * 1000,
+            )
             self._ingest_event(msg)
         elif msg_type == "profiling_started":
             _log.info("profiling_started: uuid=%s ok=%s", msg.get("uuid"), msg.get("ok"))
             if not msg.get("ok"):
-                _log.warning("Bridge could not find stateObj for %s — no functions patched", msg.get("uuid"))
+                _log.warning(
+                    "Bridge could not find stateObj for %s — no functions patched",
+                    msg.get("uuid"),
+                )
                 self._set_stopped()
         elif msg_type == "profiling_stopped":
             _log.debug("profiling_stopped received")
@@ -591,7 +874,7 @@ class ProfilerView(Gtk.Stack):
         if self._profiling:
             self._set_stopped()
 
-    # ── Data management ────────────────────────────────────────────────────
+    # ── Data management ──────────────────────────────────────────────────
 
     def _ingest_event(
         self, event: dict[str, Any], *, schedule_refresh: bool = True
@@ -608,7 +891,6 @@ class ProfilerView(Gtk.Stack):
             self._schedule_refresh()
 
     def _schedule_refresh(self) -> None:
-        """Debounce store/timeline refresh to at most once per 80 ms."""
         if self._refresh_pending:
             return
         self._refresh_pending = True
@@ -621,13 +903,54 @@ class ProfilerView(Gtk.Stack):
     def _flush_refresh(self) -> None:
         self._refresh_pending = False
         self._recompute_self_times()
-        # Fresh FunctionStat instances every refresh: GtkColumnView skips
-        # unbind+bind when the same GObject pointer reappears at a given
-        # position, which otherwise leaves stale counts in the table cells
-        # whenever a stat updates in place between flushes.
-        snapshots = [self._stat_snapshot(s) for s in self._stats.values()]
-        self._store.splice(0, self._store.get_n_items(), snapshots)
-        self._timeline.queue_draw()
+
+        # Update toggle visibility of empty state vs. data view.
+        if self._raw_events:
+            self._inner_stack.set_visible_child_name("data")
+            self._clear_btn.set_sensitive(True)
+            self._save_btn.set_sensitive(True)
+        else:
+            self._inner_stack.set_visible_child_name("empty")
+            self._clear_btn.set_sensitive(False)
+            self._save_btn.set_sensitive(False)
+
+        # Cache the max total before splicing so the Distribution cells can read it.
+        self._max_total_ms = max((s.total_ms for s in self._stats.values()), default=1.0)
+
+        self._refresh_table_only()
+        self._update_stat_cards()
+        self._update_active_graph()
+        self._update_timeline_caption()
+        self._update_recording_pill()
+
+    def _refresh_table_only(self) -> None:
+        ft = self._filter_text
+        items = []
+        for s in self._stats.values():
+            if ft and ft not in s.name.lower():
+                continue
+            items.append(self._stat_snapshot(s))
+        self._store.splice(0, self._store.get_n_items(), items)
+        self._fn_caption.set_text(
+            f"{len(items)} shown · {len(self._stats)} total" if ft else f"{len(self._stats)} unique"
+        )
+        # Splice resets selection — restore from our authoritative state.
+        self._sync_table_selection(self._selected_fn)
+
+    def _update_active_graph(self) -> None:
+        # Push events to all three so a quick tab-switch is instant.
+        self._flamegraph.set_events(self._raw_events)
+        self._swimlane.set_events(self._raw_events)
+        self._histogram.set_stats(list(self._stats.values()))
+
+    def _update_timeline_caption(self) -> None:
+        if not self._raw_events:
+            self._tl_caption.set_text("")
+            return
+        t0 = min(e["start"] for e in self._raw_events)
+        t1 = max(e["end"] for e in self._raw_events)
+        span_ms = (t1 - t0) * 1000.0
+        self._tl_caption.set_text(f"{len(self._raw_events)} events · {_fmt_ms(span_ms)} span")
 
     @staticmethod
     def _stat_snapshot(stat: FunctionStat) -> FunctionStat:
@@ -641,12 +964,12 @@ class ProfilerView(Gtk.Stack):
     def _recompute_self_times(self) -> None:
         """Aggregate per-function self-time = total minus direct children.
 
-        Uses a stack-based pass over events sorted by (start ASC, end DESC)
-        so that parents are visited before their children. Each event's
-        full duration is added to its own self bucket, then its parent's
-        bucket is decremented by that duration — leaving each event with
-        exclusive (non-callee) wall-clock time. Results are summed per
-        function name into ``FunctionStat.self_ms``.
+        Stack-based pass over events sorted by (start ASC, end DESC) so
+        parents are visited before their children. Each event's full
+        duration is added to its own self bucket, then its parent's bucket
+        is decremented by that duration — leaving each event with exclusive
+        (non-callee) wall-clock time. Results sum per function name into
+        ``FunctionStat.self_ms``.
         """
         for s in self._stats.values():
             s.self_ms = 0.0
@@ -671,3 +994,4 @@ class ProfilerView(Gtk.Stack):
     def _clear_data(self) -> None:
         self._stats.clear()
         self._raw_events.clear()
+        self._apply_selected_fn(None, sync_table=True)
