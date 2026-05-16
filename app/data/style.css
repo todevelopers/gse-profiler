@@ -47,10 +47,10 @@
   font-family: monospace;
   font-size: 11px;
   font-weight: 600;
-  padding: 1px 7px;
+  padding: 0 6px;
   border-radius: 9999px;
   background-color: alpha(@view_fg_color, 0.08);
-  min-height: 16px;
+  min-height: 14px;
 }
 
 .inspector-type-pill.t-string {
@@ -95,9 +95,18 @@
    the row is hovered. */
 .inspector-drill-slot {
   opacity: 0;
-  min-height: 22px;
-  min-width: 22px;
-  padding: 2px;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
+}
+
+/* The expand chevron in the name column is a flat Gtk.Button; Adwaita
+   gives it ~28px height by default which dominates row height. Slim it
+   down to match the drill slot. */
+columnview button.flat {
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
 }
 
 columnview row:hover .inspector-drill-slot.inspector-drill-active {
@@ -113,12 +122,12 @@ columnview row .inspector-drill-slot.inspector-drill-active:hover {
    for one-line property rows). Hover highlights whichever row the
    mouse is over. */
 columnview row {
-  min-height: 22px;
+  min-height: 18px;
 }
 
 columnview > listview > row > cell {
-  padding-top: 2px;
-  padding-bottom: 2px;
+  padding-top: 1px;
+  padding-bottom: 1px;
 }
 
 columnview row:hover {
