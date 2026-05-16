@@ -100,6 +100,10 @@ class ProfilerView(Gtk.Stack):
         self._filter_text: str = ""
         self._max_total_ms: float = 1.0
 
+        # Recording stopwatch
+        self._rec_start_ts: float | None = None
+        self._rec_timer_id: int = 0
+
         settings = _load_settings()
         mode = settings.get("mode", _DEFAULT_MODE)
         self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
@@ -183,13 +187,19 @@ class ProfilerView(Gtk.Stack):
         self._rec_revealer = Gtk.Revealer()
         self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
         self._rec_revealer.set_reveal_child(False)
+        self._rec_revealer.set_valign(Gtk.Align.CENTER)
 
         rec_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         rec_box.add_css_class("prof-rec")
+        rec_box.set_valign(Gtk.Align.CENTER)
         dot = Gtk.Box()
         dot.add_css_class("prof-rec-dot")
+        dot.set_valign(Gtk.Align.CENTER)
+        dot.set_halign(Gtk.Align.CENTER)
+        dot.set_size_request(8, 8)
         rec_box.append(dot)
         self._rec_label = Gtk.Label(label="Recording")
+        self._rec_label.set_valign(Gtk.Align.CENTER)
         rec_box.append(self._rec_label)
         self._rec_revealer.set_child(rec_box)
         toolbar.append(self._rec_revealer)
@@ -686,11 +696,15 @@ class ProfilerView(Gtk.Stack):
                 return
             self._socket.send({"type": "start_profiling", "uuid": uuid})
             self._profiling = True
+            self._rec_start_ts = GLib.get_monotonic_time() / 1e6
+            self._start_rec_timer()
             self._set_start_stop_state(running=True)
             self._update_recording_pill()
 
     def _set_stopped(self) -> None:
         self._profiling = False
+        self._stop_rec_timer()
+        self._rec_start_ts = None
         self._set_start_stop_state(running=False)
         self._update_recording_pill()
         enabled = (
@@ -699,9 +713,43 @@ class ProfilerView(Gtk.Stack):
         )
         self._start_stop_btn.set_sensitive(enabled)
 
+    def _start_rec_timer(self) -> None:
+        if self._rec_timer_id:
+            return
+        self._rec_timer_id = GLib.timeout_add_seconds(1, self._rec_timer_tick)
+
+    def _stop_rec_timer(self) -> None:
+        if self._rec_timer_id:
+            GLib.source_remove(self._rec_timer_id)
+            self._rec_timer_id = 0
+
+    def _rec_timer_tick(self) -> bool:
+        if not self._profiling:
+            self._rec_timer_id = 0
+            return False  # GLib.SOURCE_REMOVE
+        self._update_recording_pill()
+        return True  # GLib.SOURCE_CONTINUE
+
+    @staticmethod
+    def _fmt_elapsed(seconds: int) -> str:
+        if seconds >= 3600:
+            h, rem = divmod(seconds, 3600)
+            m, s = divmod(rem, 60)
+            return f"{h}:{m:02d}:{s:02d}"
+        m, s = divmod(seconds, 60)
+        return f"{m}:{s:02d}"
+
     def _update_recording_pill(self) -> None:
         if self._profiling:
-            self._rec_label.set_text(f" Recording · {len(self._raw_events)} events")
+            if self._rec_start_ts is not None:
+                elapsed = int((GLib.get_monotonic_time() / 1e6) - self._rec_start_ts)
+            else:
+                elapsed = 0
+            n = len(self._raw_events)
+            word = "event" if n == 1 else "events"
+            self._rec_label.set_text(
+                f" Recording · {self._fmt_elapsed(elapsed)} · {n} {word}"
+            )
             self._rec_revealer.set_reveal_child(True)
         else:
             self._rec_revealer.set_reveal_child(False)
