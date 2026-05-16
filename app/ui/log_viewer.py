@@ -189,7 +189,6 @@ class LogViewerView(Gtk.Box):
         cmd_bar.add_css_class("log-cmdbar")
         cmd_bar.append(cmd_label)
         cmd_bar.append(self._cmd_entry)
-        cmd_bar.append(self._start_stop_btn)
 
         self._cmd_revealer = Gtk.Revealer()
         self._cmd_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
@@ -251,6 +250,7 @@ class LogViewerView(Gtk.Box):
         filter_bar.append(self._copy_btn)
         filter_bar.append(export_btn)
         filter_bar.append(clear_btn)
+        filter_bar.append(self._start_stop_btn)
 
         # ── Status bar (counts + stat dots + state pill) ───────────────────
         self._status_lbl = Gtk.Label()
