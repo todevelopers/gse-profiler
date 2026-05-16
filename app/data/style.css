@@ -40,15 +40,17 @@
   padding: 2px 6px;
 }
 
-/* Type pill — small rounded badge, color encodes type. */
+/* Type pill — small rounded badge, color encodes type.
+   min-height keeps every cell the same vertical footprint regardless
+   of whether the pill draws a background, so all rows are flush. */
 .inspector-type-pill {
   font-family: monospace;
   font-size: 11px;
   font-weight: 600;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 9999px;
   background-color: alpha(@view_fg_color, 0.08);
-  min-height: 0;
+  min-height: 20px;
 }
 
 .inspector-type-pill.t-string {
@@ -66,10 +68,11 @@
   background-color: alpha(@warning_color, 0.14);
 }
 
+/* Use a distinct purple for object/array so they don't read as 'number'. */
 .inspector-type-pill.t-object,
 .inspector-type-pill.t-array {
-  color: @accent_color;
-  background-color: transparent;
+  color: #c061cb;
+  background-color: alpha(#c061cb, 0.14);
 }
 
 .inspector-type-pill.t-function,
@@ -86,16 +89,34 @@
   background-color: alpha(@error_color, 0.14);
 }
 
-/* Drill-in chevron — dimmed by default, brightens on hover. */
-.inspector-drill {
-  opacity: 0.4;
+/* Drill-in chevron — reserves a fixed slot in the layout regardless of
+   whether the row is drillable, so columns line up between rows. The
+   button is invisible by default; the active rows reveal it only when
+   the row is hovered. */
+.inspector-drill-slot {
+  opacity: 0;
   min-height: 22px;
   min-width: 22px;
   padding: 2px;
 }
 
-.inspector-drill:hover {
+columnview row:hover .inspector-drill-slot.inspector-drill-active {
+  opacity: 0.55;
+}
+
+columnview row .inspector-drill-slot.inspector-drill-active:hover {
   opacity: 1;
+}
+
+/* No grid lines — clean list. Force a fixed row height so pills /
+   expand-chevron presence don't cause rows to bounce in size.
+   Hover highlights whichever row the mouse is over. */
+columnview row {
+  min-height: 32px;
+}
+
+columnview row:hover {
+  background-color: alpha(@view_fg_color, 0.06);
 }
 
 .inspector-value {

@@ -125,8 +125,8 @@ class InspectorView(Gtk.Stack):
 
         col_view = Gtk.ColumnView(model=self._selection)
         col_view.set_vexpand(True)
-        col_view.set_show_row_separators(True)
-        col_view.set_show_column_separators(True)
+        col_view.set_show_row_separators(False)
+        col_view.set_show_column_separators(False)
         col_view.connect("activate", self._on_row_activate)
         self._col_view = col_view
 
@@ -204,7 +204,7 @@ class InspectorView(Gtk.Stack):
         label.add_css_class("monospace")
         drill_btn = Gtk.Button(icon_name="go-next-symbolic")
         drill_btn.add_css_class("flat")
-        drill_btn.add_css_class("inspector-drill")
+        drill_btn.add_css_class("inspector-drill-slot")
         drill_btn.set_can_focus(False)
         drill_btn.set_tooltip_text("Inspect subtree")
         box.append(expand_btn)
@@ -221,18 +221,35 @@ class InspectorView(Gtk.Stack):
 
         box.set_margin_start(item.depth * 24)
 
-        # Expand toggle — only for depth-0 items with children
-        expand_btn.set_visible(item.has_children and item.depth == 0)
-        if item.has_children and item.depth == 0:
+        # Expand toggle — always occupy the same slot so rows align; only the
+        # icon is visible when the row is actually expandable.
+        has_expand = item.has_children and item.depth == 0
+        if has_expand:
             expand_btn.set_icon_name(
                 "pan-down-symbolic" if item.expanded else "pan-end-symbolic"
             )
+            expand_btn.set_opacity(1.0)
+            expand_btn.set_can_target(True)
+            expand_btn.set_sensitive(True)
+        else:
+            expand_btn.set_icon_name("pan-end-symbolic")  # placeholder for sizing
+            expand_btn.set_opacity(0)
+            expand_btn.set_can_target(False)
+            expand_btn.set_sensitive(False)
 
         label.set_label(item.name)
 
-        # Drill button — any depth-0 object/array (bridge resolves path fresh on demand)
+        # Drill button — depth-0 object/array. Slot is always present; the
+        # 'inspector-drill-active' class lets CSS reveal it on row hover.
         drillable = item.depth == 0 and item.type_str in ("object", "array")
-        drill_btn.set_visible(drillable)
+        if drillable:
+            drill_btn.add_css_class("inspector-drill-active")
+            drill_btn.set_can_target(True)
+            drill_btn.set_sensitive(True)
+        else:
+            drill_btn.remove_css_class("inspector-drill-active")
+            drill_btn.set_can_target(False)
+            drill_btn.set_sensitive(False)
 
         # Rebind expand handler
         btn_id = id(expand_btn)
