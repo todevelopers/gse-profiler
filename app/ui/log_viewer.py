@@ -344,8 +344,8 @@ class LogViewerView(Gtk.Box):
         self._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self._scroll.set_child(col_view)
 
-        self.append(self._cmd_revealer)
         self.append(filter_bar)
+        self.append(self._cmd_revealer)
         self.append(status_bar)
         self.append(self._scroll)
 
