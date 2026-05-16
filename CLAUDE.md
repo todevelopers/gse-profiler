@@ -118,6 +118,111 @@ gse-profiler/
 
 ---
 
+## Headless Smoke Testing on Windows (WSL)
+
+The repo lives on Windows but the app targets GNOME/Linux. Full UI testing
+needs a real GNOME 48+ box (D-Bus, Wayland, gnome-shell). For everything
+short of that — syntax, imports, widget construction, draw functions —
+use WSL. PyGObject 3.48+, GTK4, and libadwaita-1 are typically already
+installed on a recent Ubuntu WSL.
+
+After every non-trivial change to `app/`, run all four steps below. They
+take a few seconds, catch almost every static error, and don't require a
+display.
+
+**1. Syntax check (Windows Python is fine here, no `gi` needed):**
+
+```bash
+py -c "
+import ast
+for p in [
+    'C:/GitHubRepos/gse-profiler/app/ui/profiler_view.py',
+    # …add the files you touched
+]:
+    with open(p, encoding='utf-8') as f: ast.parse(f.read())
+    print('OK:', p)
+"
+```
+
+**2. Import check — every module under WSL** (catches missing names, bad
+relative imports, signal-type mismatches at class-construction time):
+
+```bash
+wsl -- bash -c "cd /mnt/c/GitHubRepos/gse-profiler && python3 -c '
+import sys, os; sys.path.insert(0, os.getcwd())
+from app.ui.profiler_view import ProfilerView
+# …import every module touched
+print(\"imports OK\")
+'"
+```
+
+**3. Headless instantiation** — construct the view with real
+`DBusClient`/`SocketServer` (their `__init__` is non-blocking; no actual
+bus or socket is opened until `start()` or main-loop iteration), exercise
+the data flow, check state transitions:
+
+```bash
+wsl -- bash -c "cd /mnt/c/GitHubRepos/gse-profiler && python3 -c '
+import sys, os; sys.path.insert(0, os.getcwd())
+import gi
+gi.require_version(\"Gtk\", \"4.0\"); gi.require_version(\"Adw\", \"1\")
+from gi.repository import Gtk
+Gtk.init_check()  # returns True without a display
+
+from app.core.dbus_client import DBusClient
+from app.core.socket_server import SocketServer
+from app.ui.profiler_view import ProfilerView
+
+view = ProfilerView(DBusClient(), SocketServer())
+# Feed events directly through the ingest path (bypasses socket I/O)
+view._ingest_event({\"function\": \"foo\", \"start\": 0.0, \"end\": 0.01, \"depth\": 0}, schedule_refresh=False)
+view._flush_refresh()
+assert view._inner_stack.get_visible_child_name() == \"data\"
+print(\"ok\")
+'"
+```
+
+**4. Headless draw** — `Gtk.DrawingArea` draw functions never fire
+without a display, so call them directly against a `cairo.ImageSurface`.
+This catches index errors, off-by-ones, and hit-test rect generation:
+
+```bash
+wsl -- bash -c "cd /mnt/c/GitHubRepos/gse-profiler && python3 -c '
+import sys, os, cairo; sys.path.insert(0, os.getcwd())
+import gi; gi.require_version(\"Gtk\", \"4.0\"); gi.require_version(\"Adw\", \"1\")
+from gi.repository import Gtk
+Gtk.init_check()
+from app.ui.profiler.flamegraph import FlamegraphView
+
+fg = FlamegraphView()
+fg.set_events([{\"function\":\"foo\",\"start\":0.0,\"end\":0.01,\"depth\":0}])
+cr = cairo.Context(cairo.ImageSurface(cairo.FORMAT_ARGB32, 800, 300))
+fg._draw(fg, cr, 800, 300)
+assert len(fg._bar_rects) == 1
+print(\"draw ok\")
+'"
+```
+
+### What WSL cannot test
+- **Live D-Bus** — no `gnome-shell` running, so `DBusClient` never reaches
+  the `proxy ready` callback. Code paths gated on `_proxy is not None`
+  will not execute. Test these on a real GNOME box.
+- **Bridge socket** — `SocketServer.start()` creates the socket but no
+  bridge will connect to it.
+- **Hover / click / keyboard events** — `Gtk.EventControllerMotion` and
+  `Gtk.GestureClick` only fire under a real display. Call the handler
+  methods directly if you need to test them headless.
+- **`Adw.StyleManager.get_default().get_dark()`** — works headless but
+  always returns the default theme. Theme-switch behaviour is GNOME-only.
+
+### Final check: real GNOME session
+For UI changes always also run `python3 -m app.main` on a real GNOME 48+
+machine before reporting the work as done. Headless covers code paths;
+only the live app covers visual layout, colour, animation, popover
+placement, and interaction timing.
+
+---
+
 ## Key Rules for the Agent
 
 1. **Never block the GTK main loop** — all I/O must be async or run in a thread.
@@ -125,3 +230,4 @@ gse-profiler/
 3. **opt-in API must be side-effect free when not connected** — all `DevToolsClient` methods must silently no-op when the bridge socket is unavailable.
 4. **Bridge lifecycle** — always call `disable()` cleanup: disconnect signals, close socket, remove monkey-patches.
 5. **Tests live in `tests/`** — use `pytest`; mock D-Bus and subprocess in unit tests.
+6. **Verify in WSL before reporting done** — run the four headless checks in the "Headless Smoke Testing" section above after any non-trivial `app/` change.
