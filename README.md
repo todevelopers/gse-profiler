@@ -22,9 +22,8 @@ log filtering, object inspection — without leaving the desktop.
 
 ## Gallery
 <img width="1250" height="818" alt="Screenshot From 2026-05-16 12-40-11" src="https://github.com/user-attachments/assets/084aceef-e270-46a4-8120-274e519f6cb8" />
+<img width="1250" height="830" alt="Screenshot From 2026-05-16 14-39-41" src="https://github.com/user-attachments/assets/74bfa024-e534-43da-8125-f24719e3e092" />
 <img width="1523" height="770" alt="Screenshot From 2026-05-14 10-33-46" src="https://github.com/user-attachments/assets/5135c59e-5825-4e24-8712-8d3044d25f30" />
-<img width="1523" height="770" alt="Screenshot From 2026-05-14 10-34-42" src="https://github.com/user-attachments/assets/603caa7d-7b31-45f2-af2d-83ec6c1df2a9" />
-
 
 ---
 
