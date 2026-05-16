@@ -240,7 +240,6 @@ class LogViewerView(Gtk.Box):
 
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_bar.add_css_class("log-filterbar")
-        filter_bar.append(self._cmd_toggle_btn)
         filter_bar.append(self._filter_selected_btn)
         filter_bar.append(self._search_entry)
         filter_bar.append(self._auto_scroll_btn)
@@ -250,6 +249,10 @@ class LogViewerView(Gtk.Box):
         filter_bar.append(self._copy_btn)
         filter_bar.append(export_btn)
         filter_bar.append(clear_btn)
+
+        sep2 = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        filter_bar.append(sep2)
+        filter_bar.append(self._cmd_toggle_btn)
         filter_bar.append(self._start_stop_btn)
 
         # ── Status bar (counts + stat dots + state pill) ───────────────────
