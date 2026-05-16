@@ -25,18 +25,6 @@ _DEFAULT_CMD = "journalctl --user -f"
 _SETTINGS_KEY = "journal_cmd"
 _INVALID_POS = GLib.MAXUINT
 
-_LEVEL_OPTIONS: list[tuple[str, int | None]] = [
-    ("All Levels", None),
-    ("DEBUG", 7),
-    ("INFO", 6),
-    ("WARNING", 4),
-    ("ERROR", 3),
-    ("CRITICAL", 2),
-]
-
-_LEVEL_NAMES = [label for label, _ in _LEVEL_OPTIONS]
-_LEVEL_THRESHOLDS = {label: threshold for label, threshold in _LEVEL_OPTIONS}
-
 # Priority bucket → stat dot identifier. Buckets group the syslog priorities
 # into four user-friendly severities.
 _BUCKET_ERROR = "error"   # priority 0-3 (emerg / alert / crit / error)
@@ -150,7 +138,6 @@ class LogViewerView(Gtk.Box):
         self._uuid_filter: str | None = None
         self._selected_uuid: str | None = None
         self._filter_selected = False
-        self._level_threshold: int | None = None
         self._solo_bucket: str | None = None
         self._search_text = ""
         self._auto_scroll = True
@@ -221,11 +208,6 @@ class LogViewerView(Gtk.Box):
         self._filter_selected_btn.set_active(False)
         self._filter_selected_btn.connect("toggled", self._on_filter_selected_toggled)
 
-        level_list = Gtk.StringList.new(_LEVEL_NAMES)
-        self._level_dropdown = Gtk.DropDown.new(level_list, None)
-        self._level_dropdown.set_tooltip_text("Minimum log level to display")
-        self._level_dropdown.connect("notify::selected", self._on_level_changed)
-
         self._search_entry = Gtk.SearchEntry()
         self._search_entry.set_hexpand(True)
         self._search_entry.set_placeholder_text("Search logs…")
@@ -256,7 +238,6 @@ class LogViewerView(Gtk.Box):
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_bar.add_css_class("log-filterbar")
         filter_bar.append(self._filter_selected_btn)
-        filter_bar.append(self._level_dropdown)
         filter_bar.append(self._search_entry)
         filter_bar.append(self._auto_scroll_btn)
 
@@ -285,7 +266,7 @@ class LogViewerView(Gtk.Box):
             btn.add_css_class("flat")
             btn.set_tooltip_text(f"Show only {_bucket_label(bucket)} entries")
             label = Gtk.Label()
-            label.set_label(f"● 0")
+            label.set_label(f"{_bucket_label(bucket)} 0")
             btn.set_child(label)
             btn.connect("toggled", self._on_stat_dot_toggled, bucket)
             self._stat_buttons[bucket] = btn
@@ -516,12 +497,6 @@ class LogViewerView(Gtk.Box):
         self._uuid_filter = self._selected_uuid if self._filter_selected else None
         self._rebuild_view()
 
-    def _on_level_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:
-        item = dropdown.get_selected_item()
-        label = item.get_string() if item else "All Levels"
-        self._level_threshold = _LEVEL_THRESHOLDS.get(label)
-        self._rebuild_view()
-
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
         self._search_text = entry.get_text()
         self._rebuild_view()
@@ -701,8 +676,6 @@ class LogViewerView(Gtk.Box):
         bucket = _priority_bucket(entry.priority)
         if self._solo_bucket is not None and bucket != self._solo_bucket:
             return False
-        if self._level_threshold is not None and entry.priority > self._level_threshold:
-            return False
         if self._uuid_filter:
             short = self._uuid_filter.split("@")[0]
             if f"[{short}]" not in entry.message:
@@ -723,7 +696,7 @@ class LogViewerView(Gtk.Box):
 
     def _refresh_stat_dots(self) -> None:
         for bucket, label in self._stat_labels.items():
-            label.set_label(f"● {self._bucket_counts[bucket]}")
+            label.set_label(f"{_bucket_label(bucket)} {self._bucket_counts[bucket]}")
 
     def _update_status_label(self) -> None:
         visible = self._store.get_n_items()
