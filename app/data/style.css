@@ -1,0 +1,119 @@
+/* GSE Profiler — application styling.
+   Adopts Adwaita named colors (@accent_color, @success_color, …) so we
+   inherit the user's accent and follow light/dark theme switches. */
+
+/* ── Inspector ───────────────────────────────────────────────────────── */
+
+.inspector-toolbar {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 6px 14px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+}
+
+.inspector-status {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+.inspector-breadcrumb {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 4px 12px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+}
+
+.inspector-breadcrumb button {
+  font-family: monospace;
+  padding: 2px 6px;
+  min-height: 0;
+  border-radius: 4px;
+}
+
+.inspector-breadcrumb .inspector-bc-sep {
+  opacity: 0.35;
+  padding: 0 2px;
+}
+
+.inspector-breadcrumb .inspector-bc-current {
+  font-family: monospace;
+  font-weight: 700;
+  padding: 2px 6px;
+}
+
+/* Type pill — small rounded badge, color encodes type. */
+.inspector-type-pill {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background-color: alpha(@view_fg_color, 0.08);
+  min-height: 0;
+}
+
+.inspector-type-pill.t-string {
+  color: @success_color;
+  background-color: alpha(@success_color, 0.14);
+}
+
+.inspector-type-pill.t-number {
+  color: @accent_color;
+  background-color: alpha(@accent_color, 0.14);
+}
+
+.inspector-type-pill.t-boolean {
+  color: @warning_color;
+  background-color: alpha(@warning_color, 0.14);
+}
+
+.inspector-type-pill.t-object,
+.inspector-type-pill.t-array {
+  color: @accent_color;
+  background-color: transparent;
+}
+
+.inspector-type-pill.t-function,
+.inspector-type-pill.t-null,
+.inspector-type-pill.t-undefined,
+.inspector-type-pill.t-getter,
+.inspector-type-pill.t-info {
+  opacity: 0.5;
+  background-color: transparent;
+}
+
+.inspector-type-pill.t-error {
+  color: @error_color;
+  background-color: alpha(@error_color, 0.14);
+}
+
+/* Drill-in chevron — dimmed by default, brightens on hover. */
+.inspector-drill {
+  opacity: 0.4;
+  min-height: 22px;
+  min-width: 22px;
+  padding: 2px;
+}
+
+.inspector-drill:hover {
+  opacity: 1;
+}
+
+.inspector-value {
+  opacity: 0.85;
+}
+
+.inspector-value.dim {
+  opacity: 0.45;
+}
+
+/* Cell padding inside the inline child rows */
+.inspector-child-cell {
+  background-color: alpha(@view_fg_color, 0.04);
+}
+
+/* Make column-view header titles read as a caption strip. */
+columnview > header > .button label {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.55;
+}

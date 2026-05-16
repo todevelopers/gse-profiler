@@ -133,19 +133,24 @@ Phases 8–12 go beyond V1 with constructive additions.
 ### Bridge side
 
 - [x] `bridge-extension/inspector.js`
-  - `inspect(uuid)` — get reference to extension's `stateObj`
+  - `inspect(uuid, path)` — resolve `stateObj` down the path one level at a time
   - Enumerate own properties + prototype chain (1 level)
-  - Serialize: `{ name, type, value, writable }` — handle functions, circular refs, symbols
-  - Respond with `{ type: "inspect_result", extensionUuid, properties: [...] }`
+  - Serialize: `{ name, type, value }` — handle functions, circular refs, symbols
+  - Respond with `{ type: "inspect_result", extensionUuid, path, properties: [...] }`
 
 ### App side
 
 - [x] Inspector UI
-  - `GtkColumnView`: property name | type | value
-  - Expand row for object/array values (1-level deep in V1)
+  - `GtkColumnView`: property name | type | value (read-only in V1)
+  - Inline expand chevron for object/array values (depth 0)
+  - Drill-in chevron + monospace breadcrumb for nested navigation
   - Refresh button
-  - Copy property path / value to clipboard
-  - Inline editing for string / number / boolean properties (send `set_property` message back)
+  - Copy selected row (name + type + value) to clipboard
+  - Type pills color-coded by JS type (string / number / boolean / object / array / null / error)
+
+> **Descoped from V1:** inline property editing was prototyped but cut because
+> the bridge would have needed full path-aware writes plus `Gio.Settings`
+> support to be useful. See Phase 13 for the full plan.
 
 ---
 
@@ -261,23 +266,77 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
+## Phase 13: Inspector V2 — Writable Properties (V2+)
+
+**Goal:** Bring back inline editing of extension state in a way that actually
+works across the whole tree, not just the root level.
+
+### Why this is its own phase
+
+The V1 prototype only wrote to `stateObj[name]`, ignoring the active drill path,
+and could never edit GSettings-backed values (which is where most extensions
+keep their configurable state). Doing it properly means cooperating with both
+nested object paths and `Gio.Settings`, so it belongs in V2.
+
+### Bridge side
+
+- [ ] `setProperty(uuid, path, name, value)` — walk `stateObj` down `path`,
+      then assign to `target[name]`. Honour both data descriptors with `writable: true`
+      and accessor descriptors with a setter.
+- [ ] Detect `Gio.Settings` instances during serialization; expose their keys as
+      writable children with their declared schema type (`b`, `i`, `d`, `s`, enums).
+- [ ] Re-introduce a `writable` flag in `inspect_result` for each property — only
+      `true` when the property is actually assignable on the current `holder`
+      (own data prop, accessor with setter, or known GSettings key).
+- [ ] Validate `set_property` values against the property's reported type before
+      assigning; reject with a typed error instead of throwing.
+
+### App side
+
+- [ ] Render a "writable" affordance on rows that can be edited (e.g. an edit
+      pencil icon that appears on hover, mirroring the drill-in chevron).
+- [ ] Adwaita `AlertDialog` for edit, with a control matched to the type:
+  - String → `Gtk.Entry`
+  - Number → `Gtk.SpinButton` with min/max from GSettings schema where known
+  - Boolean → `Gtk.Switch`
+  - Enum (GSettings choice key) → `Gtk.DropDown` populated with allowed values
+- [ ] Send `set_property` with the current navigation `path` and the row `name`.
+- [ ] On `set_property_result.ok` → re-issue `inspect` at the current path and
+      flash the affected row briefly to confirm the write.
+- [ ] On `set_property_result.error` → `Adw.Toast` with the bridge's error message.
+- [ ] Drop stale `set_property_result`s where `extensionUuid` / `path` no longer
+      match the active navigation (same pattern as stale `inspect_result`s).
+
+### Protocol additions
+
+```
+→ { type: "set_property", uuid, path, name, value }
+← { type: "set_property_result", extensionUuid, path, name, ok, error? }
+```
+
+`inspect_result.properties[*].writable` returns as a boolean — absent or `false`
+means read-only for V1 clients.
+
+---
+
 ## Milestone Summary
 
-| Phase | Milestone          | Scope                      |
-| ----- | ------------------ | -------------------------- |
-| 0     | Skeleton + CI      | Project setup              |
-| 1     | Extension Manager  | List, enable/disable       |
-| 2     | Bridge + Socket    | App ↔ Shell IPC            |
-| 3     | Log Viewer         | Live filtered logs         |
-| 4     | Profiler V1        | Function timing table      |
-| 5     | Inspector          | stateObj live view         |
-| 6     | GitHub clone       | Install extensions         |
-| 7     | opt-in API         | Developer integration      |
-| 8     | Flame graph        | Visual profiling (V2)      |
-| 9     | Memory profiling   | Heap analysis (V2)         |
-| 10    | Health checks      | Linting + validation (V2+) |
-| 11    | Settings + Polish  | UX completeness (V2+)      |
-| 12    | Packaging          | Flatpak + releases (V2+)   |
+| Phase | Milestone           | Scope                       |
+| ----- | ------------------- | --------------------------- |
+| 0     | Skeleton + CI       | Project setup               |
+| 1     | Extension Manager   | List, enable/disable        |
+| 2     | Bridge + Socket     | App ↔ Shell IPC             |
+| 3     | Log Viewer          | Live filtered logs          |
+| 4     | Profiler V1         | Function timing table       |
+| 5     | Inspector           | stateObj live view (R/O)    |
+| 6     | GitHub clone        | Install extensions          |
+| 7     | opt-in API          | Developer integration       |
+| 8     | Flame graph         | Visual profiling (V2)       |
+| 9     | Memory profiling    | Heap analysis (V2)          |
+| 10    | Health checks       | Linting + validation (V2+)  |
+| 11    | Settings + Polish   | UX completeness (V2+)       |
+| 12    | Packaging           | Flatpak + releases (V2+)    |
+| 13    | Inspector writable  | Full property editing (V2+) |
 
 ---
 

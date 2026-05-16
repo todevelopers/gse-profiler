@@ -47,32 +47,6 @@ export class Inspector {
         }
     }
 
-    /**
-     * Update a writable own property on the extension's stateObj.
-     * @param {string} uuid
-     * @param {string} name
-     * @param {*} value
-     * @returns {{ ok: boolean, error?: string }}
-     */
-    setProperty(uuid, name, value) {
-        const ext = Main.extensionManager.lookup(uuid);
-        if (!ext?.stateObj) {
-            return { ok: false, error: 'extension not found' };
-        }
-        try {
-            const desc = Object.getOwnPropertyDescriptor(ext.stateObj, name);
-            if (!desc) {
-                return { ok: false, error: 'property not found on stateObj' };
-            }
-            if (!desc.writable && typeof desc.set !== 'function') {
-                return { ok: false, error: 'property is not writable' };
-            }
-            ext.stateObj[name] = value;
-            return { ok: true };
-        } catch (e) {
-            return { ok: false, error: e.message };
-        }
-    }
 }
 
 // ── Serialization helpers ────────────────────────────────────────────────────
@@ -81,26 +55,25 @@ function _serializeObject(obj) {
     const seen = new WeakSet();
     seen.add(obj);
 
-    // Collect from prototype chain 1 level up (excluding Object.prototype).
+    // Collect from prototype chain 1 level up (excluding Object.prototype),
+    // then let own properties override prototype entries.
     const propsMap = new Map();
     const proto = Object.getPrototypeOf(obj);
     if (proto && proto !== Object.prototype) {
         for (const name of Object.getOwnPropertyNames(proto)) {
             if (name === 'constructor') { continue; }
             const desc = _safeDescriptor(proto, name);
-            if (desc) { propsMap.set(name, { desc, isOwn: false, holder: obj }); }
+            if (desc) { propsMap.set(name, desc); }
         }
     }
-
-    // Own properties override prototype entries.
     for (const name of Object.getOwnPropertyNames(obj)) {
         const desc = _safeDescriptor(obj, name);
-        if (desc) { propsMap.set(name, { desc, isOwn: true, holder: obj }); }
+        if (desc) { propsMap.set(name, desc); }
     }
 
     const result = [];
-    for (const [name, { desc, isOwn, holder }] of propsMap) {
-        result.push(_serializeProp(name, desc, isOwn, holder, seen));
+    for (const [name, desc] of propsMap) {
+        result.push(_serializeProp(name, desc, obj, seen));
     }
     return result;
 }
@@ -114,21 +87,20 @@ function _serializeArray(arr) {
     for (let i = 0; i < limit; i++) {
         try {
             const [type, value, children] = _describeValue(arr[i], seen);
-            const item = { name: String(i), type, value, writable: true };
+            const item = { name: String(i), type, value };
             if (children) { item.children = children; }
             result.push(item);
         } catch (_) {
-            result.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
+            result.push({ name: String(i), type: 'error', value: '[serialization error]' });
         }
     }
     if (arr.length > _MAX_CHILDREN) {
-        result.push({ name: '…', type: 'info', value: `${arr.length - _MAX_CHILDREN} more items`, writable: false });
+        result.push({ name: '…', type: 'info', value: `${arr.length - _MAX_CHILDREN} more items` });
     }
     return result;
 }
 
-function _serializeProp(name, desc, isOwn, holder, seen) {
-    const writable = isOwn && (desc.writable === true || typeof desc.set === 'function');
+function _serializeProp(name, desc, holder, seen) {
     let type, value, children;
 
     try {
@@ -143,7 +115,7 @@ function _serializeProp(name, desc, isOwn, holder, seen) {
         value = `[serialization error: ${e.message}]`;
     }
 
-    const result = { name, type: type ?? 'error', value: value ?? '', writable };
+    const result = { name, type: type ?? 'error', value: value ?? '' };
     if (children) { result.children = children; }
     return result;
 }
@@ -171,13 +143,13 @@ function _describeValue(v, seen) {
         for (let i = 0; i < limit; i++) {
             try {
                 const [ct, cv] = _describeValue(v[i], seen);
-                children.push({ name: String(i), type: ct, value: String(cv), writable: true });
+                children.push({ name: String(i), type: ct, value: String(cv) });
             } catch (_) {
-                children.push({ name: String(i), type: 'error', value: '[serialization error]', writable: false });
+                children.push({ name: String(i), type: 'error', value: '[serialization error]' });
             }
         }
         if (v.length > _MAX_CHILDREN) {
-            children.push({ name: '…', type: 'info', value: `${v.length - _MAX_CHILDREN} more`, writable: false });
+            children.push({ name: '…', type: 'info', value: `${v.length - _MAX_CHILDREN} more` });
         }
         seen.delete(v);
         return ['array', `Array(${v.length})`, children.length > 0 ? children : null];
@@ -204,7 +176,7 @@ function _describeValue(v, seen) {
                 ct = 'error';
                 cv = '[serialization error]';
             }
-            children.push({ name: k, type: ct, value: String(cv), writable: desc.writable ?? false });
+            children.push({ name: k, type: ct, value: String(cv) });
         }
     } catch (_) { /* skip on enumeration errors */ }
     seen.delete(v);

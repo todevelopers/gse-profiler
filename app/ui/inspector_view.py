@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 import gi
@@ -14,18 +13,22 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
 
-_log = logging.getLogger(__name__)
-
 _INVALID_POS = GLib.MAXUINT
 
-_TYPE_CSS: dict[str, str] = {
-    "function": "dim-label",
-    "null": "dim-label",
-    "undefined": "dim-label",
-    "error": "error",
-    "getter": "dim-label",
-    "info": "dim-label",
-}
+# Order matches the design's "Type pill palette".
+_TYPE_PILL_CLASSES: tuple[str, ...] = (
+    "t-string",
+    "t-number",
+    "t-boolean",
+    "t-object",
+    "t-array",
+    "t-function",
+    "t-null",
+    "t-undefined",
+    "t-error",
+    "t-getter",
+    "t-info",
+)
 
 
 class PropertyItem(GObject.Object):
@@ -38,7 +41,6 @@ class PropertyItem(GObject.Object):
         name: str,
         type_str: str,
         value_str: str,
-        writable: bool,
         depth: int = 0,
         parent_name: str = "",
     ) -> None:
@@ -46,7 +48,6 @@ class PropertyItem(GObject.Object):
         self.name = name
         self.type_str = type_str
         self.value_str = value_str
-        self.writable = writable
         self.depth = depth
         self.parent_name = parent_name
         self.has_children = False
@@ -96,24 +97,23 @@ class InspectorView(Gtk.Stack):
 
         # ── Toolbar ────────────────────────────────────────────────────────
         toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        toolbar.set_margin_start(6)
-        toolbar.set_margin_end(6)
-        toolbar.set_margin_top(6)
-        toolbar.set_margin_bottom(6)
+        toolbar.add_css_class("inspector-toolbar")
 
         refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
         refresh_btn.set_tooltip_text("Refresh properties")
+        refresh_btn.add_css_class("flat")
         refresh_btn.connect("clicked", self._on_refresh)
 
         self._copy_btn = Gtk.Button(icon_name="edit-copy-symbolic")
         self._copy_btn.set_tooltip_text("Copy selected value to clipboard")
+        self._copy_btn.add_css_class("flat")
         self._copy_btn.set_sensitive(False)
         self._copy_btn.connect("clicked", self._on_copy)
 
         self._status_lbl = Gtk.Label()
         self._status_lbl.set_hexpand(True)
         self._status_lbl.set_halign(Gtk.Align.END)
-        self._status_lbl.add_css_class("dim-label")
+        self._status_lbl.add_css_class("inspector-status")
 
         toolbar.append(refresh_btn)
         toolbar.append(self._copy_btn)
@@ -135,7 +135,7 @@ class InspectorView(Gtk.Stack):
         name_fac.connect("setup", self._name_setup)
         name_fac.connect("bind", self._name_bind)
         name_fac.connect("unbind", self._name_unbind)
-        name_col = Gtk.ColumnViewColumn(title="Property", factory=name_fac)
+        name_col = Gtk.ColumnViewColumn(title="PROPERTY", factory=name_fac)
         name_col.set_fixed_width(260)
         name_col.set_resizable(True)
         col_view.append_column(name_col)
@@ -144,7 +144,7 @@ class InspectorView(Gtk.Stack):
         type_fac = Gtk.SignalListItemFactory()
         type_fac.connect("setup", self._type_setup)
         type_fac.connect("bind", self._type_bind)
-        type_col = Gtk.ColumnViewColumn(title="Type", factory=type_fac)
+        type_col = Gtk.ColumnViewColumn(title="TYPE", factory=type_fac)
         type_col.set_fixed_width(90)
         type_col.set_resizable(True)
         col_view.append_column(type_col)
@@ -153,7 +153,7 @@ class InspectorView(Gtk.Stack):
         value_fac = Gtk.SignalListItemFactory()
         value_fac.connect("setup", self._value_setup)
         value_fac.connect("bind", self._value_bind)
-        value_col = Gtk.ColumnViewColumn(title="Value", factory=value_fac)
+        value_col = Gtk.ColumnViewColumn(title="VALUE", factory=value_fac)
         value_col.set_expand(True)
         value_col.set_resizable(True)
         col_view.append_column(value_col)
@@ -179,10 +179,7 @@ class InspectorView(Gtk.Stack):
 
         # ── Breadcrumb bar ───────────────────────────────────────────────────
         self._breadcrumb_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        self._breadcrumb_box.set_margin_start(6)
-        self._breadcrumb_box.set_margin_end(6)
-        self._breadcrumb_box.set_margin_top(2)
-        self._breadcrumb_box.set_margin_bottom(2)
+        self._breadcrumb_box.add_css_class("inspector-breadcrumb")
 
         self._breadcrumb_revealer = Gtk.Revealer()
         self._breadcrumb_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
@@ -191,7 +188,6 @@ class InspectorView(Gtk.Stack):
 
         content.append(toolbar)
         content.append(self._breadcrumb_revealer)
-        content.append(Gtk.Separator())
         content.append(self._stack)
 
     # ── Name column factory ────────────────────────────────────────────────
@@ -208,6 +204,7 @@ class InspectorView(Gtk.Stack):
         label.add_css_class("monospace")
         drill_btn = Gtk.Button(icon_name="go-next-symbolic")
         drill_btn.add_css_class("flat")
+        drill_btn.add_css_class("inspector-drill")
         drill_btn.set_can_focus(False)
         drill_btn.set_tooltip_text("Inspect subtree")
         box.append(expand_btn)
@@ -275,16 +272,18 @@ class InspectorView(Gtk.Stack):
     def _type_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         label = Gtk.Label()
         label.set_halign(Gtk.Align.START)
+        label.add_css_class("inspector-type-pill")
         list_item.set_child(label)
 
     def _type_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: PropertyItem = list_item.get_item()
         label: Gtk.Label = list_item.get_child()
-        for cls in _TYPE_CSS.values():
+        for cls in _TYPE_PILL_CLASSES:
             label.remove_css_class(cls)
         label.set_label(item.type_str)
-        if css := _TYPE_CSS.get(item.type_str):
-            label.add_css_class(css)
+        safe = "".join(c for c in item.type_str.lower() if c.isalpha())
+        if safe:
+            label.add_css_class(f"t-{safe}")
 
     # ── Value column factory ───────────────────────────────────────────────
 
@@ -294,12 +293,17 @@ class InspectorView(Gtk.Stack):
         label.set_ellipsize(Pango.EllipsizeMode.END)
         label.set_hexpand(True)
         label.add_css_class("monospace")
+        label.add_css_class("inspector-value")
         list_item.set_child(label)
 
     def _value_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
         item: PropertyItem = list_item.get_item()
         label: Gtk.Label = list_item.get_child()
         label.set_label(item.value_str)
+        if item.type_str in ("null", "undefined"):
+            label.add_css_class("dim")
+        else:
+            label.remove_css_class("dim")
 
     # ── Expand / collapse ──────────────────────────────────────────────────
 
@@ -322,7 +326,6 @@ class InspectorView(Gtk.Stack):
                 name=c.get("name", ""),
                 type_str=c.get("type", "unknown"),
                 value_str=str(c.get("value", "")),
-                writable=c.get("writable", False),
                 depth=1,
                 parent_name=parent.name,
             )
@@ -389,24 +392,22 @@ class InspectorView(Gtk.Stack):
         back_btn.connect("clicked", self._on_back)
         self._breadcrumb_box.append(back_btn)
 
-        # Segments: "stateObj › _fetcher › _client"
+        # Segments: "stateObj › _fetcher › _client" — first is always literal stateObj.
         segments = ["stateObj"] + self._current_path
         for i, seg in enumerate(segments):
             if i > 0:
-                sep = Gtk.Label(label=" › ")
-                sep.add_css_class("dim-label")
+                sep = Gtk.Label(label="›")
+                sep.add_css_class("inspector-bc-sep")
                 self._breadcrumb_box.append(sep)
             if i < len(segments) - 1:
                 target = self._current_path[:i]
                 btn = Gtk.Button(label=seg)
                 btn.add_css_class("flat")
-                btn.add_css_class("monospace")
                 btn.connect("clicked", lambda _b, p=target: self._navigate_to(p))
                 self._breadcrumb_box.append(btn)
             else:
                 lbl = Gtk.Label(label=seg)
-                lbl.add_css_class("monospace")
-                lbl.add_css_class("heading")
+                lbl.add_css_class("inspector-bc-current")
                 self._breadcrumb_box.append(lbl)
 
     # ── Public API ─────────────────────────────────────────────────────────
@@ -464,64 +465,21 @@ class InspectorView(Gtk.Stack):
     def _on_selection_changed(self, _sel: Gtk.SingleSelection, _pos: int, _n: int) -> None:
         self._copy_btn.set_sensitive(self._selection.get_selected() != _INVALID_POS)
 
-    # ── Inline editing ─────────────────────────────────────────────────────
+    # ── Row activation ─────────────────────────────────────────────────────
 
     def _on_row_activate(self, _col_view: Gtk.ColumnView, pos: int) -> None:
         item: PropertyItem | None = self._store.get_item(pos)
-        if not item or not item.writable or item.depth != 0:
+        if not item:
             return
-        if item.type_str not in ("string", "number", "boolean"):
-            return
-        self._show_edit_dialog(item)
-
-    def _show_edit_dialog(self, item: PropertyItem) -> None:
-        dialog = Adw.AlertDialog(
-            heading=f"Edit: {item.name}",
-            body=f"Current type: {item.type_str}",
-        )
-        dialog.add_response("cancel", "Cancel")
-        dialog.add_response("apply", "Apply")
-        dialog.set_default_response("apply")
-        dialog.set_close_response("cancel")
-        dialog.set_response_appearance("apply", Adw.ResponseAppearance.SUGGESTED)
-
-        entry = Gtk.Entry()
-        entry.set_text(item.value_str)
-        entry.set_activates_default(True)
-        dialog.set_extra_child(entry)
-
-        def on_response(_dialog: Adw.AlertDialog, response: str) -> None:
-            if response != "apply" or not self._current_uuid:
-                return
-            raw = entry.get_text()
-            if item.type_str == "number":
-                try:
-                    f = float(raw)
-                    parsed: Any = int(f) if f == int(f) else f
-                except ValueError:
-                    return
-            elif item.type_str == "boolean":
-                parsed = raw.lower() in ("true", "1", "yes")
-            else:
-                parsed = raw
-            self._socket.send({
-                "type": "set_property",
-                "uuid": self._current_uuid,
-                "name": item.name,
-                "value": parsed,
-            })
-
-        dialog.connect("response", on_response)
-        dialog.present(self.get_root())
+        # Double-click a row with children → drill in.
+        if item.depth == 0 and item.type_str in ("object", "array"):
+            self._navigate_to(self._current_path + [item.name])
 
     # ── Socket message handling ────────────────────────────────────────────
 
     def _on_message(self, _server: SocketServer, msg: dict[str, Any]) -> None:
-        msg_type = msg.get("type")
-        if msg_type == "inspect_result":
+        if msg.get("type") == "inspect_result":
             self._on_inspect_result(msg)
-        elif msg_type == "set_property_result":
-            self._on_set_property_result(msg)
 
     def _on_inspect_result(self, msg: dict[str, Any]) -> None:
         if msg.get("extensionUuid") != self._current_uuid:
@@ -536,7 +494,6 @@ class InspectorView(Gtk.Stack):
                 name=prop.get("name", ""),
                 type_str=prop.get("type", "unknown"),
                 value_str=str(prop.get("value", "")),
-                writable=prop.get("writable", False),
             )
             children = prop.get("children")
             if children:
@@ -557,16 +514,6 @@ class InspectorView(Gtk.Stack):
                 f"No inspectable properties found for {self._current_uuid}."
             )
             self._stack.set_visible_child_name("placeholder")
-
-    def _on_set_property_result(self, msg: dict[str, Any]) -> None:
-        if msg.get("ok"):
-            self._navigate_to(self._current_path)
-        else:
-            _log.warning(
-                "set_property failed for %s: %s",
-                msg.get("name", ""),
-                msg.get("error", "unknown error"),
-            )
 
     def _on_client_connected(self, _server: SocketServer) -> None:
         if self._current_uuid:

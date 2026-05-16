@@ -9,10 +9,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import gi
 
 gi.require_version("Adw", "1")
+gi.require_version("Gdk", "4.0")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Adw, Gio, GLib, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango
 
 from app.core.bridge_manager import BRIDGE_UUID, BridgeManager
 from app.core.dbus_client import DBusClient, ExtensionState
@@ -284,6 +285,7 @@ class Application(Adw.Application):
         self._bootstrap_handler: int = 0
 
     def _on_activate(self, _app: "Application") -> None:
+        self._load_css()
         self._socket_server.start()
         self._win = MainWindow(
             application=self,
@@ -297,6 +299,21 @@ class Application(Adw.Application):
             "extensions-changed", self._on_ready_for_bootstrap
         )
         self._dbus_client.connect("extensions-changed", self._on_bridge_state_changed)
+
+    def _load_css(self) -> None:
+        display = Gdk.Display.get_default()
+        if display is None:
+            return
+        css_path = _PROJECT_ROOT / "app" / "data" / "style.css"
+        if not css_path.exists():
+            return
+        provider = Gtk.CssProvider()
+        provider.load_from_path(str(css_path))
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+        )
 
     def do_shutdown(self) -> None:
         self._bridge.deactivate()

@@ -100,12 +100,6 @@ export default class GSEProfilerBridge extends Extension {
             this._socketClient?.send({ type: 'inspect_result', extensionUuid: msg.uuid, path, ...result });
             break;
         }
-        case 'set_property': {
-            log(`[gse-profiler-bridge] set_property: uuid=${msg.uuid} name=${msg.name}`);
-            const result = this._inspector?.setProperty(msg.uuid, msg.name, msg.value) ?? { ok: false };
-            this._socketClient?.send({ type: 'set_property_result', extensionUuid: msg.uuid, name: msg.name, ...result });
-            break;
-        }
         default:
             log(`[gse-profiler-bridge] unhandled message type: ${msg.type}`);
         }
