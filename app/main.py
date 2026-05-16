@@ -126,8 +126,9 @@ class MainWindow(Adw.ApplicationWindow):
         )
         self._inspector_page.set_icon_name("edit-find-symbolic")
 
-        logs_page = self._view_stack.add_titled(self._logs_view, "logs", "Logs")
-        logs_page.set_icon_name("text-x-generic-symbolic")
+        self._logs_page = self._view_stack.add_titled(self._logs_view, "logs", "Logs")
+        self._logs_page.set_icon_name("text-x-generic-symbolic")
+        self._logs_view.connect("count-changed", self._on_logs_count_changed)
 
         switcher = Adw.ViewSwitcher()
         switcher.set_stack(self._view_stack)
@@ -258,6 +259,9 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         self._conn_chip.set_connected(False)
+
+    def _on_logs_count_changed(self, _view: LogViewerView, count: int) -> None:
+        self._logs_page.set_badge_number(count)
 
     # ── Bridge actions ─────────────────────────────────────────────────────
 

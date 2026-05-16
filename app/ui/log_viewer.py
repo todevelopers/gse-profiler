@@ -1,15 +1,19 @@
+import hashlib
 import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
 import gi
 
+gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GLib, GObject, Gtk
+gi.require_version("Pango", "1.0")
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
@@ -19,6 +23,7 @@ _log = logging.getLogger(__name__)
 MAX_ENTRIES = 5000
 _DEFAULT_CMD = "journalctl --user -f"
 _SETTINGS_KEY = "journal_cmd"
+_INVALID_POS = GLib.MAXUINT
 
 _LEVEL_OPTIONS: list[tuple[str, int | None]] = [
     ("All Levels", None),
@@ -32,18 +37,56 @@ _LEVEL_OPTIONS: list[tuple[str, int | None]] = [
 _LEVEL_NAMES = [label for label, _ in _LEVEL_OPTIONS]
 _LEVEL_THRESHOLDS = {label: threshold for label, threshold in _LEVEL_OPTIONS}
 
-_PRIORITY_TAG: dict[int, str] = {
-    7: "tag-debug",
-    6: "tag-info",
-    5: "tag-info",
-    4: "tag-warning",
-    3: "tag-error",
-    2: "tag-error",
-    1: "tag-error",
-    0: "tag-error",
+# Priority bucket → stat dot identifier. Buckets group the syslog priorities
+# into four user-friendly severities.
+_BUCKET_ERROR = "error"   # priority 0-3 (emerg / alert / crit / error)
+_BUCKET_WARN = "warn"     # priority 4 (warning)
+_BUCKET_INFO = "info"     # priority 5-6 (notice / info)
+_BUCKET_DEBUG = "debug"   # priority 7 (debug)
+
+_BUCKET_LABELS: dict[str, str] = {
+    _BUCKET_ERROR: "ERROR",
+    _BUCKET_WARN: "WARN",
+    _BUCKET_INFO: "INFO",
+    _BUCKET_DEBUG: "DEBUG",
 }
 
+# Hash-derived tag color palette (12 hues defined in style.css as tag-c0..tag-cB)
+_TAG_PALETTE_SIZE = 12
+_TAG_PALETTE_CHARS = "0123456789AB"
+_TAG_CSS_CLASSES = tuple(f"tag-c{c}" for c in _TAG_PALETTE_CHARS)
+_LEVEL_PILL_CLASSES = ("lvl-error", "lvl-warn", "lvl-info", "lvl-debug")
+
 _MSG_TAG_RE = re.compile(r'^(?:JS LOG:\s*)?\[([^\]]+)\]\s*(.*)', re.DOTALL)
+
+
+def _priority_bucket(priority: int) -> str:
+    if priority <= 3:
+        return _BUCKET_ERROR
+    if priority == 4:
+        return _BUCKET_WARN
+    if priority <= 6:
+        return _BUCKET_INFO
+    return _BUCKET_DEBUG
+
+
+def _bucket_pill_class(bucket: str) -> str:
+    return {
+        _BUCKET_ERROR: "lvl-error",
+        _BUCKET_WARN: "lvl-warn",
+        _BUCKET_INFO: "lvl-info",
+        _BUCKET_DEBUG: "lvl-debug",
+    }[bucket]
+
+
+def _bucket_label(bucket: str) -> str:
+    return _BUCKET_LABELS[bucket]
+
+
+def _tag_color_class(tag: str) -> str:
+    digest = hashlib.md5(tag.encode("utf-8")).digest()
+    idx = digest[0] % _TAG_PALETTE_SIZE
+    return _TAG_CSS_CLASSES[idx]
 
 
 def _extract_log_tag(message: str) -> tuple[str | None, str]:
@@ -73,8 +116,29 @@ def _save_settings(data: dict) -> None:
     p.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+class LogRowItem(GObject.Object):
+    """One row in the log column view."""
+
+    __gtype_name__ = "LogRowItem"
+
+    def __init__(self, entry: LogEntry) -> None:
+        super().__init__()
+        self.entry = entry
+        tag, body = _extract_log_tag(entry.message)
+        self.tag = tag if tag else entry.identifier
+        self.body = body
+        self.bucket = _priority_bucket(entry.priority)
+        self.time_str = entry.timestamp.strftime("%H:%M:%S.%f")[:-3]
+
+
 class LogViewerView(Gtk.Box):
-    """Live journalctl log viewer with filtering and toolbar actions."""
+    """Live journalctl log viewer with structured column-view rendering."""
+
+    __gsignals__ = {
+        # Emitted on visible-entry-count change so the host window can update
+        # a tab badge (or similar) without polling.
+        "count-changed": (GObject.SignalFlags.RUN_LAST, None, (int,)),
+    }
 
     def __init__(self, dbus_client: DBusClient) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
@@ -87,16 +151,34 @@ class LogViewerView(Gtk.Box):
         self._selected_uuid: str | None = None
         self._filter_selected = False
         self._level_threshold: int | None = None
+        self._solo_bucket: str | None = None
         self._search_text = ""
         self._auto_scroll = True
         self._is_running = False
+
+        # Bucket counts across all entries
+        self._bucket_counts: dict[str, int] = {
+            _BUCKET_ERROR: 0,
+            _BUCKET_WARN: 0,
+            _BUCKET_INFO: 0,
+            _BUCKET_DEBUG: 0,
+        }
+
+        # Stat dot toggle buttons keyed by bucket
+        self._stat_buttons: dict[str, Gtk.ToggleButton] = {}
+        self._stat_labels: dict[str, Gtk.Label] = {}
+        # Suppress toggle-handler recursion while we adjust radio behavior
+        self._suppress_stat_toggle = False
 
         settings = _load_settings()
         cmd = settings.get(_SETTINGS_KEY, _DEFAULT_CMD)
         self._journal_cmd: str = cmd if isinstance(cmd, str) else _DEFAULT_CMD
 
+        # Column-view backing store and selection (multi-select for copy)
+        self._store = Gio.ListStore(item_type=LogRowItem)
+        self._selection = Gtk.MultiSelection.new(self._store)
+
         self._build_ui()
-        self._setup_tags()
 
         self._reader.connect("log-entry", self._on_log_entry)
         self.connect("destroy", lambda _w: self._reader.stop())
@@ -106,7 +188,6 @@ class LogViewerView(Gtk.Box):
     def _build_ui(self) -> None:
         # ── Command bar ─────────────────────────────────────────────────────
         cmd_label = Gtk.Label(label="Command:")
-        cmd_label.set_margin_start(2)
 
         self._cmd_entry = Gtk.Entry()
         self._cmd_entry.set_text(self._journal_cmd)
@@ -119,16 +200,14 @@ class LogViewerView(Gtk.Box):
         self._cmd_entry.connect("activate", self._on_cmd_activate)
         self._cmd_entry.connect("changed", self._on_cmd_changed)
 
-        self._start_stop_btn = Gtk.Button(label="Start")
+        self._start_stop_btn = Gtk.Button()
         self._start_stop_btn.add_css_class("suggested-action")
         self._start_stop_btn.set_tooltip_text("Start reading the journal")
         self._start_stop_btn.connect("clicked", self._on_start_stop)
+        self._set_start_stop_state(running=False)
 
-        cmd_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        cmd_bar.set_margin_start(6)
-        cmd_bar.set_margin_end(6)
-        cmd_bar.set_margin_top(6)
-        cmd_bar.set_margin_bottom(6)
+        cmd_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        cmd_bar.add_css_class("log-cmdbar")
         cmd_bar.append(cmd_label)
         cmd_bar.append(self._cmd_entry)
         cmd_bar.append(self._start_stop_btn)
@@ -163,21 +242,19 @@ class LogViewerView(Gtk.Box):
         clear_btn.set_tooltip_text("Clear log")
         clear_btn.connect("clicked", self._on_clear)
 
-        copy_btn = Gtk.Button(icon_name="edit-copy-symbolic")
-        copy_btn.add_css_class("flat")
-        copy_btn.set_tooltip_text("Copy selected text")
-        copy_btn.connect("clicked", self._on_copy)
+        self._copy_btn = Gtk.Button(icon_name="edit-copy-symbolic")
+        self._copy_btn.add_css_class("flat")
+        self._copy_btn.set_tooltip_text("Copy selected rows (Ctrl/Shift-click to multi-select)")
+        self._copy_btn.set_sensitive(False)
+        self._copy_btn.connect("clicked", self._on_copy)
 
         export_btn = Gtk.Button(icon_name="document-save-symbolic")
         export_btn.add_css_class("flat")
-        export_btn.set_tooltip_text("Export visible log to .txt")
+        export_btn.set_tooltip_text("Export visible log (.txt or .json)")
         export_btn.connect("clicked", self._on_export)
 
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        filter_bar.set_margin_start(6)
-        filter_bar.set_margin_end(6)
-        filter_bar.set_margin_top(0)
-        filter_bar.set_margin_bottom(6)
+        filter_bar.add_css_class("log-filterbar")
         filter_bar.append(self._filter_selected_btn)
         filter_bar.append(self._level_dropdown)
         filter_bar.append(self._search_entry)
@@ -185,42 +262,209 @@ class LogViewerView(Gtk.Box):
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
         filter_bar.append(sep)
-        filter_bar.append(copy_btn)
+        filter_bar.append(self._copy_btn)
         filter_bar.append(export_btn)
         filter_bar.append(clear_btn)
 
-        # ── Text view ───────────────────────────────────────────────────────
-        self._text_view = Gtk.TextView()
-        self._text_view.set_editable(False)
-        self._text_view.set_cursor_visible(False)
-        self._text_view.set_monospace(True)
-        self._text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self._text_view.set_vexpand(True)
-        self._text_view.set_hexpand(True)
-        self._text_view.add_css_class("log-view")
+        # ── Status bar (counts + stat dots + state pill) ───────────────────
+        self._status_lbl = Gtk.Label()
+        self._status_lbl.set_halign(Gtk.Align.START)
+        self._status_lbl.set_hexpand(True)
+        self._status_lbl.add_css_class("log-status-text")
+
+        dots_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        for bucket, dot_cls in (
+            (_BUCKET_ERROR, "dot-error"),
+            (_BUCKET_WARN, "dot-warn"),
+            (_BUCKET_INFO, "dot-info"),
+            (_BUCKET_DEBUG, "dot-debug"),
+        ):
+            btn = Gtk.ToggleButton()
+            btn.add_css_class("log-stat-dot")
+            btn.add_css_class(dot_cls)
+            btn.add_css_class("flat")
+            btn.set_tooltip_text(f"Show only {_bucket_label(bucket)} entries")
+            label = Gtk.Label()
+            label.set_label(f"● 0")
+            btn.set_child(label)
+            btn.connect("toggled", self._on_stat_dot_toggled, bucket)
+            self._stat_buttons[bucket] = btn
+            self._stat_labels[bucket] = label
+            dots_box.append(btn)
+
+        self._state_pill = Gtk.Label()
+        self._state_pill.add_css_class("log-state-pill")
+        self._set_state_pill(running=False)
+
+        status_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        status_bar.add_css_class("log-statusbar")
+        status_bar.append(self._status_lbl)
+        status_bar.append(dots_box)
+        status_bar.append(self._state_pill)
+
+        # ── Column view ─────────────────────────────────────────────────────
+        self._selection.connect("selection-changed", self._on_selection_changed)
+
+        col_view = Gtk.ColumnView(model=self._selection)
+        col_view.set_vexpand(True)
+        col_view.set_show_row_separators(False)
+        col_view.set_show_column_separators(False)
+        col_view.add_css_class("log-view")
+        self._col_view = col_view
+
+        # TIME column — also responsible for tinting the parent row by severity
+        time_fac = Gtk.SignalListItemFactory()
+        time_fac.connect("setup", self._time_setup)
+        time_fac.connect("bind", self._time_bind)
+        time_col = Gtk.ColumnViewColumn(title="TIME", factory=time_fac)
+        time_col.set_fixed_width(110)
+        time_col.set_resizable(True)
+        col_view.append_column(time_col)
+
+        # LEVEL pill column
+        level_fac = Gtk.SignalListItemFactory()
+        level_fac.connect("setup", self._level_setup)
+        level_fac.connect("bind", self._level_bind)
+        level_col = Gtk.ColumnViewColumn(title="LEVEL", factory=level_fac)
+        level_col.set_fixed_width(70)
+        level_col.set_resizable(True)
+        col_view.append_column(level_col)
+
+        # TAG column — colored monospace, e.g. [dash-to-dock]
+        tag_fac = Gtk.SignalListItemFactory()
+        tag_fac.connect("setup", self._tag_setup)
+        tag_fac.connect("bind", self._tag_bind)
+        tag_col = Gtk.ColumnViewColumn(title="TAG", factory=tag_fac)
+        tag_col.set_fixed_width(190)
+        tag_col.set_resizable(True)
+        col_view.append_column(tag_col)
+
+        # MESSAGE column
+        msg_fac = Gtk.SignalListItemFactory()
+        msg_fac.connect("setup", self._msg_setup)
+        msg_fac.connect("bind", self._msg_bind)
+        msg_col = Gtk.ColumnViewColumn(title="MESSAGE", factory=msg_fac)
+        msg_col.set_expand(True)
+        msg_col.set_resizable(True)
+        col_view.append_column(msg_col)
 
         self._scroll = Gtk.ScrolledWindow()
         self._scroll.set_vexpand(True)
         self._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self._scroll.set_child(self._text_view)
-        vadj = self._scroll.get_vadjustment()
-        vadj.connect("changed", self._on_scroll_adjusted)
+        self._scroll.set_child(col_view)
 
         self.append(cmd_bar)
-        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         self.append(filter_bar)
-        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        self.append(status_bar)
         self.append(self._scroll)
 
-    def _setup_tags(self) -> None:
-        buf = self._text_view.get_buffer()
-        buf.create_tag("tag-error", foreground="#E01B24")
-        buf.create_tag("tag-warning", foreground="#E5A50A")
-        buf.create_tag("tag-info")
-        buf.create_tag("tag-debug", foreground="#888888")
-        buf.create_tag("tag-search", background="#F6D32D", foreground="#000000")
+        self._update_status_label()
+
+    # ── Column factories ───────────────────────────────────────────────────
+
+    def _time_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        label = Gtk.Label()
+        label.set_halign(Gtk.Align.START)
+        label.add_css_class("log-time")
+        list_item.set_child(label)
+
+    def _time_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        item: LogRowItem = list_item.get_item()
+        label: Gtk.Label = list_item.get_child()
+        label.set_label(item.time_str)
+        # Tint the parent row according to severity bucket
+        self._apply_row_class(label, item.bucket)
+
+    def _level_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        label = Gtk.Label()
+        label.set_halign(Gtk.Align.START)
+        label.add_css_class("log-level-pill")
+        list_item.set_child(label)
+
+    def _level_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        item: LogRowItem = list_item.get_item()
+        label: Gtk.Label = list_item.get_child()
+        for cls in _LEVEL_PILL_CLASSES:
+            label.remove_css_class(cls)
+        label.set_label(_bucket_label(item.bucket))
+        label.add_css_class(_bucket_pill_class(item.bucket))
+
+    def _tag_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        label = Gtk.Label()
+        label.set_halign(Gtk.Align.START)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        label.add_css_class("log-tag")
+        list_item.set_child(label)
+
+    def _tag_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        item: LogRowItem = list_item.get_item()
+        label: Gtk.Label = list_item.get_child()
+        for cls in _TAG_CSS_CLASSES:
+            label.remove_css_class(cls)
+        label.set_label(f"[{item.tag}]")
+        label.add_css_class(_tag_color_class(item.tag))
+
+    def _msg_setup(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        label = Gtk.Label()
+        label.set_halign(Gtk.Align.START)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        label.set_hexpand(True)
+        label.add_css_class("log-message")
+        list_item.set_child(label)
+
+    def _msg_bind(self, _fac: Gtk.SignalListItemFactory, list_item: Gtk.ListItem) -> None:
+        item: LogRowItem = list_item.get_item()
+        label: Gtk.Label = list_item.get_child()
+        label.set_label(item.body)
+
+    def _apply_row_class(self, cell_widget: Gtk.Widget, bucket: str) -> None:
+        """Walk up parent chain to find the GtkListItemWidget (CSS name 'row')
+        and add/remove the severity tint class on it."""
+        parent = cell_widget.get_parent()
+        for _ in range(5):
+            if parent is None:
+                return
+            try:
+                name = parent.get_css_name()
+            except Exception:
+                name = ""
+            if name == "row":
+                for cls in ("row-warn", "row-error"):
+                    parent.remove_css_class(cls)
+                if bucket == _BUCKET_ERROR:
+                    parent.add_css_class("row-error")
+                elif bucket == _BUCKET_WARN:
+                    parent.add_css_class("row-warn")
+                return
+            parent = parent.get_parent()
 
     # ── Command bar handlers ───────────────────────────────────────────────
+
+    def _set_start_stop_state(self, running: bool) -> None:
+        if running:
+            self._start_stop_btn.set_label("Stop")
+            self._start_stop_btn.set_icon_name("media-playback-stop-symbolic")
+            self._start_stop_btn.remove_css_class("suggested-action")
+            self._start_stop_btn.add_css_class("destructive-action")
+            self._start_stop_btn.set_tooltip_text("Stop reading the journal")
+            self._cmd_entry.set_sensitive(False)
+        else:
+            self._start_stop_btn.set_label("Start")
+            self._start_stop_btn.set_icon_name("media-playback-start-symbolic")
+            self._start_stop_btn.remove_css_class("destructive-action")
+            self._start_stop_btn.add_css_class("suggested-action")
+            self._start_stop_btn.set_tooltip_text("Start reading the journal")
+            self._cmd_entry.set_sensitive(True)
+
+    def _set_state_pill(self, running: bool) -> None:
+        for c in ("running", "stopped"):
+            self._state_pill.remove_css_class(c)
+        if running:
+            self._state_pill.set_label("RUNNING")
+            self._state_pill.add_css_class("running")
+        else:
+            self._state_pill.set_label("STOPPED")
+            self._state_pill.add_css_class("stopped")
 
     def _on_cmd_activate(self, _entry: Gtk.Entry) -> None:
         if not self._is_running:
@@ -240,20 +484,14 @@ class LogViewerView(Gtk.Box):
         extra = parse_extra_args(self._journal_cmd)
         self._reader.start(extra_args=extra)
         self._is_running = True
-        self._start_stop_btn.set_label("Stop")
-        self._start_stop_btn.remove_css_class("suggested-action")
-        self._start_stop_btn.add_css_class("destructive-action")
-        self._start_stop_btn.set_tooltip_text("Stop reading the journal")
-        self._cmd_entry.set_sensitive(False)
+        self._set_start_stop_state(running=True)
+        self._set_state_pill(running=True)
 
     def _do_stop(self) -> None:
         self._reader.stop()
         self._is_running = False
-        self._start_stop_btn.set_label("Start")
-        self._start_stop_btn.remove_css_class("destructive-action")
-        self._start_stop_btn.add_css_class("suggested-action")
-        self._start_stop_btn.set_tooltip_text("Start reading the journal")
-        self._cmd_entry.set_sensitive(True)
+        self._set_start_stop_state(running=False)
+        self._set_state_pill(running=False)
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -262,52 +500,114 @@ class LogViewerView(Gtk.Box):
         self._selected_uuid = uuid
         if self._filter_selected:
             self._uuid_filter = uuid
-            self._rebuild_buffer()
+            self._rebuild_view()
 
     # ── Signal handlers — filters ──────────────────────────────────────────
 
     def _on_filter_selected_toggled(self, btn: Gtk.ToggleButton) -> None:
         self._filter_selected = btn.get_active()
         self._uuid_filter = self._selected_uuid if self._filter_selected else None
-        self._rebuild_buffer()
+        self._rebuild_view()
 
     def _on_level_changed(self, dropdown: Gtk.DropDown, _pspec: GObject.ParamSpec) -> None:
         item = dropdown.get_selected_item()
         label = item.get_string() if item else "All Levels"
         self._level_threshold = _LEVEL_THRESHOLDS.get(label)
-        self._rebuild_buffer()
+        self._rebuild_view()
 
     def _on_search_changed(self, entry: Gtk.SearchEntry) -> None:
         self._search_text = entry.get_text()
-        self._rebuild_buffer()
+        self._rebuild_view()
 
     def _on_auto_scroll_toggled(self, btn: Gtk.ToggleButton) -> None:
         self._auto_scroll = btn.get_active()
         if self._auto_scroll:
             self._scroll_to_end()
 
+    def _on_stat_dot_toggled(self, btn: Gtk.ToggleButton, bucket: str) -> None:
+        if self._suppress_stat_toggle:
+            return
+        self._suppress_stat_toggle = True
+        try:
+            if btn.get_active():
+                # Solo this bucket — deactivate any other dots
+                for other_bucket, other_btn in self._stat_buttons.items():
+                    if other_bucket != bucket and other_btn.get_active():
+                        other_btn.set_active(False)
+                self._solo_bucket = bucket
+            else:
+                self._solo_bucket = None
+        finally:
+            self._suppress_stat_toggle = False
+        self._rebuild_view()
+
     # ── Signal handlers — toolbar ──────────────────────────────────────────
 
     def _on_clear(self, _btn: Gtk.Button) -> None:
         self._entries.clear()
-        self._text_view.get_buffer().set_text("")
+        self._store.splice(0, self._store.get_n_items(), [])
+        for b in self._bucket_counts:
+            self._bucket_counts[b] = 0
+        self._refresh_stat_dots()
+        self._update_status_label()
+        self.emit("count-changed", 0)
 
     def _on_copy(self, _btn: Gtk.Button) -> None:
-        self._text_view.emit("copy-clipboard")
+        lines = [self._format_row_for_copy(item) for item in self._selected_items()]
+        if not lines:
+            return
+        self.get_clipboard().set("\n".join(lines))
+
+    def _selected_items(self) -> list[LogRowItem]:
+        bitset = self._selection.get_selection()
+        n = bitset.get_size()
+        if n == 0:
+            return []
+        items: list[LogRowItem] = []
+        for i in range(n):
+            pos = bitset.get_nth(i)
+            item = self._store.get_item(pos)
+            if item is not None:
+                items.append(item)
+        return items
+
+    def _format_row_for_copy(self, item: LogRowItem) -> str:
+        return (
+            f"{item.time_str} "
+            f"[{_bucket_label(item.bucket)}] "
+            f"[{item.tag}] {item.body}"
+        )
+
+    def _on_selection_changed(self, _sel: Gtk.MultiSelection, _pos: int, _n: int) -> None:
+        self._copy_btn.set_sensitive(self._selection.get_selection().get_size() > 0)
 
     def _on_export(self, _btn: Gtk.Button) -> None:
-        from datetime import datetime
-
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         if self._uuid_filter:
             short = self._uuid_filter.split("@")[0]
-            filename = f"gse-log_{short}_{ts}.txt"
+            base = f"gse-log_{short}_{ts}"
         else:
-            filename = f"gse-log_{ts}.txt"
+            base = f"gse-log_{ts}"
 
         dialog = Gtk.FileDialog()
         dialog.set_title("Export Log")
-        dialog.set_initial_name(filename)
+        dialog.set_initial_name(f"{base}.txt")
+
+        # File-type filters — text default, JSON as the second choice
+        txt_filter = Gtk.FileFilter()
+        txt_filter.set_name("Text file (.txt)")
+        txt_filter.add_pattern("*.txt")
+
+        json_filter = Gtk.FileFilter()
+        json_filter.set_name("JSON file (.json)")
+        json_filter.add_pattern("*.json")
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(txt_filter)
+        filters.append(json_filter)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(txt_filter)
+
         dialog.save(self.get_root(), None, self._on_export_save, None)  # type: ignore[arg-type]
 
     def _on_export_save(
@@ -320,8 +620,10 @@ class LogViewerView(Gtk.Box):
             gfile = dialog.save_finish(result)
         except GLib.Error:
             return
-        buf = self._text_view.get_buffer()
-        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
+
+        path = gfile.get_path() or ""
+        is_json = path.lower().endswith(".json")
+        text = self._render_export(as_json=is_json)
         gfile.replace_contents_bytes_async(
             GLib.Bytes.new(text.encode("utf-8")),
             None,
@@ -331,6 +633,32 @@ class LogViewerView(Gtk.Box):
             self._on_file_written,
             None,
         )
+
+    def _render_export(self, *, as_json: bool) -> str:
+        n = self._store.get_n_items()
+        if as_json:
+            rows = []
+            for i in range(n):
+                item: LogRowItem = self._store.get_item(i)
+                rows.append({
+                    "timestamp": item.entry.timestamp.isoformat(),
+                    "priority": item.entry.priority,
+                    "level": item.entry.priority_name,
+                    "tag": item.tag,
+                    "identifier": item.entry.identifier,
+                    "message": item.body,
+                })
+            return json.dumps(rows, indent=2)
+        lines = []
+        for i in range(n):
+            item: LogRowItem = self._store.get_item(i)
+            lines.append(
+                f"{item.entry.timestamp.strftime('%H:%M:%S.%f')[:-3]} "
+                f"[{item.entry.priority_name:<7}] "
+                f"[{item.tag}] "
+                f"{item.body}"
+            )
+        return "\n".join(lines) + ("\n" if lines else "")
 
     def _on_file_written(
         self,
@@ -347,15 +675,25 @@ class LogViewerView(Gtk.Box):
 
     def _on_log_entry(self, _reader: JournalReader, entry: LogEntry) -> None:
         if len(self._entries) >= MAX_ENTRIES:
-            self._entries.pop(0)
+            evicted = self._entries.pop(0)
+            self._bucket_counts[_priority_bucket(evicted.priority)] -= 1
+
         self._entries.append(entry)
+        self._bucket_counts[_priority_bucket(entry.priority)] += 1
+        self._refresh_stat_dots()
 
         if self._entry_matches(entry):
-            self._append_to_buffer(entry)
+            row = LogRowItem(entry)
+            self._store.append(row)
             if self._auto_scroll:
-                self._scroll_to_end()
+                GLib.idle_add(self._scroll_to_end)
+            self._update_status_label()
+            self.emit("count-changed", self._store.get_n_items())
 
     def _entry_matches(self, entry: LogEntry) -> bool:
+        bucket = _priority_bucket(entry.priority)
+        if self._solo_bucket is not None and bucket != self._solo_bucket:
+            return False
         if self._level_threshold is not None and entry.priority > self._level_threshold:
             return False
         if self._uuid_filter:
@@ -366,74 +704,29 @@ class LogViewerView(Gtk.Box):
             return False
         return True
 
-    # ── Buffer management ──────────────────────────────────────────────────
+    # ── View rebuild ──────────────────────────────────────────────────────
 
-    def _rebuild_buffer(self) -> None:
-        buf = self._text_view.get_buffer()
-        buf.set_text("")
-        for entry in self._entries:
-            if self._entry_matches(entry):
-                self._append_to_buffer(entry)
-        self._apply_search_highlight()
+    def _rebuild_view(self) -> None:
+        items = [LogRowItem(e) for e in self._entries if self._entry_matches(e)]
+        self._store.splice(0, self._store.get_n_items(), items)
+        self._update_status_label()
+        self.emit("count-changed", self._store.get_n_items())
         if self._auto_scroll:
-            self._scroll_to_end()
+            GLib.idle_add(self._scroll_to_end)
 
-    def _append_to_buffer(self, entry: LogEntry) -> None:
-        buf = self._text_view.get_buffer()
-        tag, body = _extract_log_tag(entry.message)
-        identifier = tag if tag else entry.identifier
-        line = (
-            f"{entry.timestamp.strftime('%H:%M:%S')} "
-            f"[{entry.priority_name:<7}] "
-            f"[{identifier}] "
-            f"{body}\n"
-        )
-        tag_name = _PRIORITY_TAG.get(entry.priority, "tag-info")
-        end = buf.get_end_iter()
-        mark_start = buf.get_char_count()
-        buf.insert(end, line)
-        start_iter = buf.get_iter_at_offset(mark_start)
-        end_iter = buf.get_end_iter()
-        buf.apply_tag_by_name(tag_name, start_iter, end_iter)
+    def _refresh_stat_dots(self) -> None:
+        for bucket, label in self._stat_labels.items():
+            label.set_label(f"● {self._bucket_counts[bucket]}")
 
-        if self._search_text:
-            self._highlight_in_range(start_iter, end_iter)
-
-    def _apply_search_highlight(self) -> None:
-        buf = self._text_view.get_buffer()
-        buf.remove_tag_by_name("tag-search", buf.get_start_iter(), buf.get_end_iter())
-        if not self._search_text:
-            return
-        self._highlight_in_range(buf.get_start_iter(), buf.get_end_iter())
-
-    def _highlight_in_range(
-        self, range_start: Gtk.TextIter, range_end: Gtk.TextIter
-    ) -> None:
-        buf = self._text_view.get_buffer()
-        search = self._search_text
-        it = range_start.copy()
-        while True:
-            found, match_start, match_end = it.forward_search(
-                search,
-                Gtk.TextSearchFlags.CASE_INSENSITIVE | Gtk.TextSearchFlags.TEXT_ONLY,
-                range_end,
-            )
-            if not found:
-                break
-            buf.apply_tag_by_name("tag-search", match_start, match_end)
-            it = match_end
+    def _update_status_label(self) -> None:
+        visible = self._store.get_n_items()
+        total = len(self._entries)
+        word = "line" if total == 1 else "lines"
+        self._status_lbl.set_label(f"Showing {visible} of {total} {word}")
 
     # ── Scroll helpers ─────────────────────────────────────────────────────
 
-    def _scroll_to_end(self) -> None:
-        buf = self._text_view.get_buffer()
-        end = buf.get_end_iter()
-        self._text_view.scroll_to_iter(end, 0.0, False, 0.0, 1.0)
-
-    def _on_scroll_adjusted(self, adj: Gtk.Adjustment) -> None:
-        if self._auto_scroll:
-            GLib.idle_add(self._do_scroll_to_end)
-
-    def _do_scroll_to_end(self) -> bool:
-        self._scroll_to_end()
+    def _scroll_to_end(self) -> bool:
+        vadj = self._scroll.get_vadjustment()
+        vadj.set_value(vadj.get_upper() - vadj.get_page_size())
         return False

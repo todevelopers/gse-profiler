@@ -127,3 +127,159 @@ columnview > header > .button label {
   font-weight: 700;
   opacity: 0.55;
 }
+
+/* ── Log Viewer ──────────────────────────────────────────────────────── */
+
+.log-cmdbar,
+.log-filterbar {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 6px 14px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+}
+
+.log-statusbar {
+  background-color: @secondary_sidebar_bg_color;
+  padding: 4px 14px;
+  border-bottom: 1px solid alpha(@view_fg_color, 0.08);
+}
+
+.log-status-text {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.55;
+}
+
+/* Stat dot button — colored dot + count, clickable to solo that level */
+.log-stat-dot {
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  min-height: 0;
+  border-radius: 999px;
+  background-color: transparent;
+  opacity: 0.55;
+}
+
+.log-stat-dot:hover {
+  background-color: alpha(@view_fg_color, 0.06);
+  opacity: 0.85;
+}
+
+.log-stat-dot:checked {
+  opacity: 1;
+  background-color: alpha(@view_fg_color, 0.10);
+}
+
+.log-stat-dot.dot-error   { color: @error_color; }
+.log-stat-dot.dot-warn    { color: #e5a50a; }
+.log-stat-dot.dot-info    { color: #2190a4; }
+.log-stat-dot.dot-debug   { color: #888888; }
+
+/* Running / stopped pill */
+.log-state-pill {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background-color: alpha(@view_fg_color, 0.10);
+  color: @view_fg_color;
+  opacity: 0.65;
+}
+
+.log-state-pill.running {
+  background-color: alpha(@success_color, 0.20);
+  color: @success_color;
+  opacity: 1;
+}
+
+.log-state-pill.stopped {
+  background-color: alpha(@view_fg_color, 0.12);
+  opacity: 0.65;
+}
+
+/* Log row cells — monospace, tight rows */
+.log-time {
+  font-family: monospace;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.log-message {
+  font-family: monospace;
+  font-size: 12px;
+  opacity: 0.90;
+}
+
+/* Level pill — colored background with text */
+.log-level-pill {
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 4px;
+  min-height: 14px;
+}
+
+.log-level-pill.lvl-error {
+  background-color: alpha(@error_color, 0.20);
+  color: @error_color;
+}
+
+.log-level-pill.lvl-warn {
+  background-color: alpha(#e5a50a, 0.20);
+  color: #e5a50a;
+}
+
+.log-level-pill.lvl-info {
+  background-color: alpha(#2190a4, 0.20);
+  color: #2190a4;
+}
+
+.log-level-pill.lvl-debug {
+  background-color: alpha(@view_fg_color, 0.10);
+  color: alpha(@view_fg_color, 0.70);
+}
+
+/* Tag label — hash-derived color, monospace, brackets included */
+.log-tag {
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.log-tag.tag-c0 { color: #62a0ea; }
+.log-tag.tag-c1 { color: #57e389; }
+.log-tag.tag-c2 { color: #f6d32d; }
+.log-tag.tag-c3 { color: #ff7800; }
+.log-tag.tag-c4 { color: #c061cb; }
+.log-tag.tag-c5 { color: #f66151; }
+.log-tag.tag-c6 { color: #5bc8af; }
+.log-tag.tag-c7 { color: #ed9eb8; }
+.log-tag.tag-c8 { color: #cdab8f; }
+.log-tag.tag-c9 { color: #99c1f1; }
+.log-tag.tag-cA { color: #ffbe6f; }
+.log-tag.tag-cB { color: #dc8add; }
+
+/* Row tints — subtle backgrounds for elevated severity rows */
+columnview.log-view > listview > row.row-warn {
+  background-color: alpha(#e5a50a, 0.08);
+}
+
+columnview.log-view > listview > row.row-error {
+  background-color: alpha(@error_color, 0.10);
+}
+
+columnview.log-view > listview > row.row-warn:hover {
+  background-color: alpha(#e5a50a, 0.15);
+}
+
+columnview.log-view > listview > row.row-error:hover {
+  background-color: alpha(@error_color, 0.18);
+}
+
+/* Match Inspector's compact column-view row metrics for the log table */
+columnview.log-view row {
+  min-height: 18px;
+}
