@@ -191,6 +191,11 @@ class LogViewerView(Gtk.Box):
         cmd_bar.append(self._cmd_entry)
         cmd_bar.append(self._start_stop_btn)
 
+        self._cmd_revealer = Gtk.Revealer()
+        self._cmd_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN)
+        self._cmd_revealer.set_reveal_child(False)
+        self._cmd_revealer.set_child(cmd_bar)
+
         # ── Filter bar ──────────────────────────────────────────────────────
         self._filter_selected_btn = Gtk.ToggleButton(label="Selected")
         self._filter_selected_btn.set_icon_name("application-x-addon-symbolic")
@@ -227,8 +232,16 @@ class LogViewerView(Gtk.Box):
         export_btn.set_tooltip_text("Export visible log (.txt or .json)")
         export_btn.connect("clicked", self._on_export)
 
+        self._cmd_toggle_btn = Gtk.ToggleButton()
+        self._cmd_toggle_btn.set_icon_name("pan-down-symbolic")
+        self._cmd_toggle_btn.add_css_class("flat")
+        self._cmd_toggle_btn.set_tooltip_text("Show/hide command")
+        self._cmd_toggle_btn.set_active(False)
+        self._cmd_toggle_btn.connect("toggled", self._on_cmd_toggle)
+
         filter_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         filter_bar.add_css_class("log-filterbar")
+        filter_bar.append(self._cmd_toggle_btn)
         filter_bar.append(self._filter_selected_btn)
         filter_bar.append(self._search_entry)
         filter_bar.append(self._auto_scroll_btn)
@@ -328,7 +341,7 @@ class LogViewerView(Gtk.Box):
         self._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         self._scroll.set_child(col_view)
 
-        self.append(cmd_bar)
+        self.append(self._cmd_revealer)
         self.append(filter_bar)
         self.append(status_bar)
         self.append(self._scroll)
@@ -487,6 +500,11 @@ class LogViewerView(Gtk.Box):
             self._rebuild_view()
 
     # ── Signal handlers — filters ──────────────────────────────────────────
+
+    def _on_cmd_toggle(self, btn: Gtk.ToggleButton) -> None:
+        revealed = btn.get_active()
+        self._cmd_revealer.set_reveal_child(revealed)
+        btn.set_icon_name("pan-up-symbolic" if revealed else "pan-down-symbolic")
 
     def _on_filter_selected_toggled(self, btn: Gtk.ToggleButton) -> None:
         self._filter_selected = btn.get_active()
