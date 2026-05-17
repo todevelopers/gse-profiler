@@ -89,11 +89,11 @@ class SwimlaneView(Gtk.DrawingArea):
     def _draw(self, _area: Gtk.DrawingArea, cr: Any, width: int, _height: int) -> None:
         dark = Adw.StyleManager.get_default().get_dark()
         if dark:
-            c_bg       = (0.12, 0.12, 0.12)
-            c_row_alt  = (0.18, 0.18, 0.18)
+            c_bg       = (0.15, 0.15, 0.15)
+            c_row_alt  = (0.19, 0.19, 0.19)
             c_text     = (0.88, 0.88, 0.88)
             c_tick     = (0.55, 0.55, 0.55)
-            c_gap_bg   = (0.08, 0.08, 0.08)
+            c_gap_bg   = (0.10, 0.10, 0.10)
         else:
             c_bg       = (1.00, 1.00, 1.00)
             c_row_alt  = (0.95, 0.95, 0.97)
