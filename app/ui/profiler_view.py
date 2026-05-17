@@ -11,7 +11,7 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
@@ -114,9 +114,9 @@ class ProfilerView(Gtk.Stack):
         settings = _load_settings()
         mode = settings.get("mode", _DEFAULT_MODE)
         self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
-        self._tl_height: int = int(settings.get("tl_height", 240))
-        self._tl_scrolls: list[Gtk.ScrolledWindow] = []
-        self._tl_drag_start_height: int = 0
+        raw_pos = settings.get("paned_pos")
+        self._paned_pos: int | None = int(raw_pos) if raw_pos is not None else None
+        self._paned_save_id: int = 0
 
         self._store: Gio.ListStore = Gio.ListStore(item_type=FunctionStat)
 
@@ -276,23 +276,52 @@ class ProfilerView(Gtk.Stack):
     # ── Data view (cards + timeline panel + table) ────────────────────────
 
     def _build_data_view(self) -> Gtk.Widget:
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scroll.set_vexpand(True)
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        body.set_vexpand(True)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        body.set_margin_start(16)
-        body.set_margin_end(16)
-        body.set_margin_top(14)
-        body.set_margin_bottom(14)
+        # Stat cards — fixed strip above the resizable split
+        cards = self._build_stat_cards()
+        cards.set_margin_start(16)
+        cards.set_margin_end(16)
+        cards.set_margin_top(14)
+        cards.set_margin_bottom(10)
+        body.append(cards)
 
-        body.append(self._build_stat_cards())
-        body.append(self._build_timeline_panel())
-        body.append(self._build_functions_header())
-        body.append(self._build_stats_table())
+        # Paned: top = timeline, bottom = functions table
+        self._paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
+        self._paned.set_vexpand(True)
+        self._paned.set_wide_handle(True)
 
-        scroll.set_child(body)
-        return scroll
+        tl_panel = self._build_timeline_panel()
+        tl_panel.set_vexpand(True)
+        tl_panel.set_margin_start(16)
+        tl_panel.set_margin_end(16)
+        tl_panel.set_margin_bottom(6)
+        self._paned.set_start_child(tl_panel)
+        self._paned.set_resize_start_child(True)
+        self._paned.set_shrink_start_child(False)
+
+        fn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        fn_box.set_vexpand(True)
+        fn_box.set_margin_start(16)
+        fn_box.set_margin_end(16)
+        fn_box.set_margin_top(8)
+        fn_box.set_margin_bottom(14)
+        fn_box.append(self._build_functions_header())
+        fn_box.append(self._build_stats_table())
+        self._paned.set_end_child(fn_box)
+        self._paned.set_resize_end_child(True)
+        self._paned.set_shrink_end_child(False)
+
+        body.append(self._paned)
+
+        if self._paned_pos is not None:
+            self._paned.set_position(self._paned_pos)
+        else:
+            self._paned.connect("notify::height", self._on_paned_height_notify)
+        self._paned.connect("notify::position", self._on_paned_position_notify)
+
+        return body
 
     # ── Stat cards ────────────────────────────────────────────────────────
 
@@ -416,7 +445,7 @@ class ProfilerView(Gtk.Stack):
 
         # Stack of three views, each in its own scrolled window.
         self._tl_stack = Gtk.Stack()
-        self._tl_stack.set_size_request(-1, self._tl_height)
+        self._tl_stack.set_vexpand(True)
         self._tl_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._tl_stack.set_transition_duration(120)
 
@@ -427,7 +456,6 @@ class ProfilerView(Gtk.Stack):
         self._histogram = HistogramView()
         self._histogram.connect("function-selected", self._on_graph_selected)
 
-        self._tl_scrolls = []
         for name, widget in (
             ("flamegraph", self._flamegraph),
             ("swimlane", self._swimlane),
@@ -438,29 +466,9 @@ class ProfilerView(Gtk.Stack):
             sw.set_vexpand(True)
             sw.set_child(widget)
             self._tl_stack.add_named(sw, name)
-            self._tl_scrolls.append(sw)
         self._tl_stack.set_visible_child_name(self._mode)
 
         outer.append(self._tl_stack)
-
-        # Resize grip — drag it vertically to change the timeline height.
-        grip = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        grip.add_css_class("prof-tl-grip")
-        grip.set_cursor(Gdk.Cursor.new_from_name("ns-resize", None))
-
-        handle = Gtk.Box()
-        handle.add_css_class("prof-tl-grip-handle")
-        handle.set_halign(Gtk.Align.CENTER)
-        handle.set_valign(Gtk.Align.CENTER)
-        grip.append(handle)
-
-        drag = Gtk.GestureDrag()
-        drag.connect("drag-begin", self._on_tl_drag_begin)
-        drag.connect("drag-update", self._on_tl_drag_update)
-        drag.connect("drag-end", self._on_tl_drag_end)
-        grip.add_controller(drag)
-
-        outer.append(grip)
         return frame
 
     def _on_mode_toggled(self, btn: Gtk.ToggleButton, mode: str) -> None:
@@ -473,25 +481,29 @@ class ProfilerView(Gtk.Stack):
         _save_settings({"mode": mode})
         self._update_active_graph()
 
-    # ── Timeline resize grip ──────────────────────────────────────────────
+    # ── Paned position persistence ────────────────────────────────────────
 
-    def _on_tl_drag_begin(self, _gesture: Gtk.GestureDrag, _x: float, _y: float) -> None:
-        self._tl_drag_start_height = self._tl_height
+    def _on_paned_height_notify(self, paned: Gtk.Paned, _param: GObject.ParamSpec) -> None:
+        h = paned.get_height()
+        if h <= 0:
+            return
+        paned.set_position(h // 2)
+        paned.disconnect_by_func(self._on_paned_height_notify)
 
-    def _on_tl_drag_update(self, _gesture: Gtk.GestureDrag, _dx: float, dy: float) -> None:
-        # Track target height without touching the widget — avoids layout
-        # thrashing (and the resulting flicker) on every pointer-move event.
-        self._tl_height = max(120, self._tl_drag_start_height + int(dy))
+    def _on_paned_position_notify(self, _paned: Gtk.Paned, _param: GObject.ParamSpec) -> None:
+        if self._paned_save_id:
+            GLib.source_remove(self._paned_save_id)
+        self._paned_save_id = GLib.timeout_add(400, self._do_save_paned_pos)
 
-    def _on_tl_drag_end(self, _gesture: Gtk.GestureDrag, _dx: float, _dy: float) -> None:
-        self._tl_stack.set_size_request(-1, self._tl_height)
-        _save_settings({"tl_height": self._tl_height})
+    def _do_save_paned_pos(self) -> bool:
+        _save_settings({"paned_pos": self._paned.get_position()})
+        self._paned_save_id = 0
+        return GLib.SOURCE_REMOVE
 
     # ── Functions section header (filter search) ─────────────────────────
 
     def _build_functions_header(self) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        box.set_margin_top(4)
 
         title = Gtk.Label(label="Functions")
         title.set_xalign(0.0)
@@ -549,13 +561,9 @@ class ProfilerView(Gtk.Stack):
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
-        scroll.set_min_content_height(180)
+        scroll.set_vexpand(True)
         scroll.set_child(col_view)
-
-        wrap = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        wrap.set_vexpand(True)
-        wrap.append(scroll)
-        return wrap
+        return scroll
 
     # Column helpers ──────────────────────────────────────────────────────
 
