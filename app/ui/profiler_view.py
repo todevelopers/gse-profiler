@@ -479,13 +479,12 @@ class ProfilerView(Gtk.Stack):
         self._tl_drag_start_height = self._tl_height
 
     def _on_tl_drag_update(self, _gesture: Gtk.GestureDrag, _dx: float, dy: float) -> None:
-        new_h = max(120, self._tl_drag_start_height + int(dy))
-        if new_h == self._tl_height:
-            return
-        self._tl_height = new_h
-        self._tl_stack.set_size_request(-1, new_h)
+        # Track target height without touching the widget — avoids layout
+        # thrashing (and the resulting flicker) on every pointer-move event.
+        self._tl_height = max(120, self._tl_drag_start_height + int(dy))
 
     def _on_tl_drag_end(self, _gesture: Gtk.GestureDrag, _dx: float, _dy: float) -> None:
+        self._tl_stack.set_size_request(-1, self._tl_height)
         _save_settings({"tl_height": self._tl_height})
 
     # ── Functions section header (filter search) ─────────────────────────
