@@ -103,6 +103,7 @@ class TooltipPopover:
         self._pop.set_parent(parent)
         self._pop.set_autohide(False)
         self._pop.set_has_arrow(False)
+        self._pop.set_can_target(False)
         self._pop.add_css_class("prof-tooltip")
         self._hide_timeout: int = 0
 
@@ -148,11 +149,9 @@ class TooltipPopover:
         rect.height = 1
         self._pop.set_pointing_to(rect)
 
-    def update_position(self, x: float, _y: float) -> None:
-        """Move only the horizontal anchor — Y stays fixed to prevent popover flipping."""
-        rect = self._pop.get_pointing_to()[1]
-        rect.x = int(x)
-        self._pop.set_pointing_to(rect)
+    def update_position(self, x: float, y: float) -> None:
+        """Move the anchor point without refreshing content or toggling visibility."""
+        self._set_pointing_rect(x, y)
 
     def show_at(self, x: float, y: float, title: str, rows: list[tuple[str, str]]) -> None:
         if self._hide_timeout:
