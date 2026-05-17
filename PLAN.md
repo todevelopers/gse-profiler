@@ -1,7 +1,7 @@
 # PLAN.md — gse-profiler Implementation Plan
 
-Each phase ends in a working, testable state. **Phases 0–6 are V1 scope** — the app is nearly release-ready.
-Phases 7–12 go beyond V1 with constructive additions.
+Each phase ends in a working, testable state. **Phases 0–5 are V1 scope** — the app is feature-complete; remaining work is polish and release preparation.
+Phases 6–11 go beyond V1 with constructive additions.
 
 ---
 
@@ -154,11 +154,46 @@ Phases 7–12 go beyond V1 with constructive additions.
 
 > **Descoped from V1:** inline property editing was prototyped but cut because
 > the bridge would have needed full path-aware writes plus `Gio.Settings`
-> support to be useful. See Phase 12 for the full plan.
+> support to be useful. See Phase 11 for the full plan.
 
 ---
 
-## Phase 6: Clone from GitHub
+## Pre-release
+
+**Goal:** Polish, packaging, and distribution prep before tagging `v1.0.0`.
+
+### Polish & UX
+
+- [ ] Visual review pass — spacing, colours, icon consistency across all views
+- [ ] Keyboard shortcuts (`Gtk.ShortcutController`): `Ctrl+R` refresh, `Ctrl+F` search, `Ctrl+S` save
+- [ ] Onboarding flow for first launch (bridge not installed → step-by-step dialog)
+- [ ] Error states and empty states reviewed in every view
+
+### GitHub repository prep
+
+- [ ] README with screenshots, feature list, and quick-start instructions
+- [ ] AppStream metadata (`app/data/org.gnome.GSEProfiler.appdata.xml`)
+- [ ] `.desktop` entry (`gse-profiler.desktop`)
+- [ ] Icon set: SVG master + rasterised 48 / 64 / 128 px PNG
+- [ ] `CHANGELOG.md` for v1.0.0
+
+### Packaging & distribution
+
+- [ ] Flatpak manifest (`build-aux/org.gnome.GSEProfiler.json`)
+  - PyGObject, GTK4, libadwaita as SDK extensions
+  - Bridge extension installed outside sandbox (`--filesystem=home`)
+- [ ] `release.yml` extended: build Flatpak bundle and attach to GitHub Release
+- [ ] Publish to Flathub
+
+---
+
+## 🚀 V1 Release
+
+> Pre-release tasks complete → tag `v1.0.0`, publish GitHub Release with Flatpak bundle + changelog.
+
+---
+
+## Phase 6: Clone from GitHub (V2)
 
 **Goal:** Install GNOME Shell extensions directly from a GitHub URL.
 
@@ -172,12 +207,6 @@ Phases 7–12 go beyond V1 with constructive additions.
   - After success: show extension name + UUID, offer to enable
 - [ ] Extensions cloned this way get an "Update" action in Extension Manager
 - [ ] Error handling: invalid URL, git not installed, network failure, UUID conflict
-
----
-
-## 🚀 V1 Release
-
-> Phases 0–6 complete → tag `v1.0.0`, publish GitHub Release with tarball + changelog.
 
 ---
 
@@ -208,34 +237,23 @@ Phases 7–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 9: Settings & Polish (V2+)
+## Phase 9: Settings & Preferences (V2+)
 
 - [ ] `AdwPreferencesWindow`
   - Theme: follow system / force dark / force light
   - Log viewer: max lines buffer, font size
   - Socket path override (advanced)
   - Auto-connect bridge on launch
-- [ ] Keyboard shortcuts (`Gtk.ShortcutController`)
-  - `Ctrl+R` — refresh current view
-  - `Ctrl+F` — focus search/filter
-  - `Ctrl+S` — save profile / log export
 - [ ] Session persistence via GSettings — remember last selected extension, filter state
 - [ ] i18n scaffold (gettext / `_()`) — English only initially, structure ready for translators
-- [ ] Onboarding flow for first launch (bridge not installed → step-by-step dialog)
 
 ---
 
-## Phase 10: Packaging & Distribution (V2+)
+## Phase 10: Extended Packaging (V2+)
 
-- [ ] AppStream metadata (`app/data/org.gnome.GSEProfiler.appdata.xml`)
-- [ ] `.desktop` entry (`gse-profiler.desktop`)
-- [ ] Icon set: SVG master + rasterised 48 / 64 / 128 px PNG
-- [ ] Flatpak manifest (`build-aux/org.gnome.GSEProfiler.json`)
-  - PyGObject, GTK4, libadwaita as SDK extensions
-  - Bridge extension installed outside sandbox (`--filesystem=home`)
 - [ ] RPM spec for Fedora/RHEL
-- [ ] `release.yml` extended: build Flatpak bundle and attach to GitHub Release
-- [ ] Bridge extension cleanup on app uninstall — call `BridgeManager.uninstall()` (or a dedicated `scripts/uninstall.sh`) from the appropriate package uninstall hook: `%preun` in RPM, `cleanup` in Flatpak manifest
+- [ ] Bridge extension cleanup on app uninstall — `BridgeManager.uninstall()` hooked into `%preun` (RPM) and `cleanup` (Flatpak manifest)
+- [ ] Full Flathub submission (review, metadata compliance, sandbox policy)
 
 ---
 
@@ -307,22 +325,23 @@ means read-only for V1 clients.
 
 ## Milestone Summary
 
-| Phase | Milestone             | Scope                         | Status       |
-| ----- | --------------------- | ----------------------------- | ------------ |
-| 0     | Skeleton + CI         | Project setup                 | ✅ done      |
-| 1     | Extension Manager     | List, enable/disable          | ✅ done      |
-| 2     | Bridge + Socket       | App ↔ Shell IPC               | ✅ done      |
-| 3     | Log Viewer            | Live filtered logs            | ✅ done      |
-| 4     | Profiler V1           | Timing table + flame graph    | ✅ done      |
-| 5     | Inspector             | stateObj live view (R/O)      | ✅ done      |
-| 6     | GitHub clone          | Install extensions            | in progress  |
-| —     | **V1 Release**        | **tag v1.0.0**                | **upcoming** |
-| 7     | Memory profiling      | Heap analysis (V2)            | planned      |
-| 8     | Health checks         | Linting + validation (V2+)    | planned      |
-| 9     | Settings + Polish     | UX completeness (V2+)         | planned      |
-| 10    | Packaging             | Flatpak + releases (V2+)      | planned      |
-| 11    | Inspector writable    | Full property editing (V2+)   | planned      |
-| —     | opt-in Developer API  | Extension author integration  | deferred ∞   |
+| Phase         | Milestone             | Scope                         | Status       |
+| ------------- | --------------------- | ----------------------------- | ------------ |
+| 0             | Skeleton + CI         | Project setup                 | ✅ done      |
+| 1             | Extension Manager     | List, enable/disable          | ✅ done      |
+| 2             | Bridge + Socket       | App ↔ Shell IPC               | ✅ done      |
+| 3             | Log Viewer            | Live filtered logs            | ✅ done      |
+| 4             | Profiler V1           | Timing table + flame graph    | ✅ done      |
+| 5             | Inspector             | stateObj live view (R/O)      | ✅ done      |
+| —             | Pre-release           | Polish, GitHub, Flatpak       | in progress  |
+| —             | **V1 Release**        | **tag v1.0.0**                | **upcoming** |
+| 6             | GitHub clone          | Install extensions (V2)       | planned      |
+| 7             | Memory profiling      | Heap analysis (V2)            | planned      |
+| 8             | Health checks         | Linting + validation (V2+)    | planned      |
+| 9             | Settings              | Preferences window (V2+)      | planned      |
+| 10            | Extended packaging    | RPM + Flathub full (V2+)      | planned      |
+| 11            | Inspector writable    | Full property editing (V2+)   | planned      |
+| —             | opt-in Developer API  | Extension author integration  | deferred ∞   |
 
 ---
 
