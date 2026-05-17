@@ -605,21 +605,6 @@ class ProfilerView(Gtk.Stack):
         self._selection = selection
         self._col_view = col_view
         self._sort_model = sort_model
-        self._pre_press_pos: int = Gtk.INVALID_LIST_POSITION
-
-        # Detect click on already-selected row (SingleSelection won't emit
-        # selection-changed for a repeat click, so toggle it manually).
-        cap = Gtk.GestureClick()
-        cap.set_button(1)
-        cap.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        cap.connect("pressed", self._on_table_capture_press)
-        col_view.add_controller(cap)
-
-        bub = Gtk.GestureClick()
-        bub.set_button(1)
-        bub.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
-        bub.connect("pressed", self._on_table_bubble_press)
-        col_view.add_controller(bub)
 
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
@@ -648,8 +633,8 @@ class ProfilerView(Gtk.Stack):
         col.set_expand(expand)
         return col
 
-    @staticmethod
     def _text_setup(
+        self,
         _factory: Gtk.SignalListItemFactory,
         item: Gtk.ListItem,
         attr: str,
@@ -664,6 +649,7 @@ class ProfilerView(Gtk.Stack):
             label.set_ellipsize(Pango.EllipsizeMode.END)
         else:
             label.add_css_class("prof-table-num")
+        self._add_deselect_gesture(label, item)
         item.set_child(label)
 
     @staticmethod
@@ -709,6 +695,7 @@ class ProfilerView(Gtk.Stack):
         area._pct_total = 0.0  # type: ignore[attr-defined]
         area._pct_self = 0.0  # type: ignore[attr-defined]
         area.set_draw_func(self._dist_draw)
+        self._add_deselect_gesture(area, item)
         item.set_child(area)
 
     def _dist_bind(self, _factory: Gtk.SignalListItemFactory, item: Gtk.ListItem) -> None:
@@ -752,16 +739,23 @@ class ProfilerView(Gtk.Stack):
 
     # Table selection handler ─────────────────────────────────────────────
 
-    def _on_table_capture_press(
-        self, _gesture: Gtk.GestureClick, _n: int, _x: float, _y: float
-    ) -> None:
-        self._pre_press_pos = self._selection.get_selected()
+    def _add_deselect_gesture(self, widget: Gtk.Widget, item: Gtk.ListItem) -> None:
+        click = Gtk.GestureClick()
+        click.set_button(1)
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        click.connect("pressed", self._on_cell_deselect_press, item)
+        widget.add_controller(click)
 
-    def _on_table_bubble_press(
-        self, _gesture: Gtk.GestureClick, _n: int, _x: float, _y: float
+    def _on_cell_deselect_press(
+        self,
+        gesture: Gtk.GestureClick,
+        _n: int,
+        _x: float,
+        _y: float,
+        item: Gtk.ListItem,
     ) -> None:
-        cur = self._selection.get_selected()
-        if self._pre_press_pos != Gtk.INVALID_LIST_POSITION and cur == self._pre_press_pos:
+        if item.get_selected():
+            gesture.set_state(Gtk.EventSequenceState.CLAIMED)
             self._apply_selected_fn(None, sync_table=True)
 
     def _on_table_selection_changed(
