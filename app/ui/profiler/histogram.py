@@ -15,7 +15,8 @@ from gi.repository import Adw, GObject, Gtk
 
 from . import TooltipPopover, desaturate_color, format_ms, rounded_rect
 
-_PAD_LEFT = 170
+_LABEL_COL_MIN = 80
+_LABEL_COL_MAX = 220
 _PAD_RIGHT = 100
 _PAD_TOP = 24
 _PAD_BOT = 22
@@ -124,7 +125,13 @@ class HistogramView(Gtk.DrawingArea):
         top = sorted(self._stats, key=lambda s: s.self_ms, reverse=True)[:_TOP_N]
         max_self = max((s.self_ms for s in top), default=1.0) or 1.0
 
-        chart_w = max(width - _PAD_LEFT - _PAD_RIGHT, 200)
+        cr.select_font_face("monospace", 0, 0)
+        cr.set_font_size(10)
+        char_w = cr.text_extents("m")[2]
+        max_name_px = max((cr.text_extents(s.name)[2] for s in top), default=float(_LABEL_COL_MIN))
+        label_col_w = int(min(max_name_px, _LABEL_COL_MAX)) + 16
+
+        chart_w = max(width - label_col_w - _PAD_RIGHT, 200)
         needed_h = _PAD_TOP + len(top) * _ROW_H + _PAD_BOT
         self.set_content_height(max(needed_h, 140))
 
@@ -132,21 +139,18 @@ class HistogramView(Gtk.DrawingArea):
         cr.set_source_rgb(*c_bg)
         cr.paint()
 
-        cr.select_font_face("monospace", 0, 0)
-        cr.set_font_size(10)
-
         # X-axis: solid baseline + tick marks + dashed guides.
         cr.set_source_rgb(*c_tick)
         cr.set_line_width(0.75)
         cr.set_dash([])
-        cr.move_to(_PAD_LEFT, _PAD_TOP - 2)
-        cr.line_to(_PAD_LEFT + chart_w, _PAD_TOP - 2)
+        cr.move_to(label_col_w, _PAD_TOP - 2)
+        cr.line_to(label_col_w + chart_w, _PAD_TOP - 2)
         cr.stroke()
 
         ticks = 5
         for i in range(ticks + 1):
             v = (i / ticks) * max_self
-            x = _PAD_LEFT + (v / max_self) * chart_w
+            x = label_col_w + (v / max_self) * chart_w
             label = f"{v:.1f} ms"
             cr.set_source_rgb(*c_tick)
             cr.set_line_width(0.75)
@@ -174,13 +178,18 @@ class HistogramView(Gtk.DrawingArea):
 
             dimmed = self._is_dimmed(s.name)
 
-            # Function name label (right-aligned to PAD_LEFT - 8 like a "axis").
-            label = s.name if len(s.name) <= 22 else f"…{s.name[-21:]}"
+            # Function name label (right-aligned to label_col_w - 8).
+            avail_w = label_col_w - 16
+            if cr.text_extents(s.name)[2] <= avail_w:
+                label = s.name
+            else:
+                max_chars = max(1, int((avail_w - cr.text_extents("…")[2]) / char_w))
+                label = s.name[:max_chars] + "…"
             r, g, b = c_text
             cr.set_source_rgba(r, g, b, 0.30 if dimmed else 0.88)
             ext = cr.text_extents(label)
             label_y = y + _ROW_H // 2 + 4
-            cr.move_to(_PAD_LEFT - 8 - ext[2], label_y)
+            cr.move_to(label_col_w - 8 - ext[2], label_y)
             cr.show_text(label)
 
             # Bar.
@@ -190,7 +199,7 @@ class HistogramView(Gtk.DrawingArea):
             w = max((s.self_ms / max_self) * chart_w, 2.0)
             bar_y = y + 5
             bar_h = _ROW_H - 10
-            rounded_rect(cr, _PAD_LEFT, bar_y, w, bar_h)
+            rounded_rect(cr, label_col_w, bar_y, w, bar_h)
             cr.set_source_rgba(br, bg, bb, alpha)
             cr.fill_preserve()
             if not dimmed:
@@ -200,17 +209,17 @@ class HistogramView(Gtk.DrawingArea):
             else:
                 cr.new_path()
             if s is self._hovered_stat:
-                rounded_rect(cr, _PAD_LEFT, bar_y, w, bar_h)
+                rounded_rect(cr, label_col_w, bar_y, w, bar_h)
                 c_hi = (1.0, 1.0, 1.0) if dark else (0.05, 0.05, 0.05)
                 cr.set_source_rgba(*c_hi, 0.9)
                 cr.set_line_width(1.5)
                 cr.stroke()
-            self._bar_rects.append((_PAD_LEFT, bar_y, w, bar_h, s))
+            self._bar_rects.append((label_col_w, bar_y, w, bar_h, s))
 
             # Trailing ms · count label.
             suffix = f"{format_ms(s.self_ms)} · {s.count}×"
             cr.set_source_rgba(r, g, b, 0.30 if dimmed else 0.68)
-            cr.move_to(_PAD_LEFT + w + 6, label_y)
+            cr.move_to(label_col_w + w + 6, label_y)
             cr.show_text(suffix)
 
     # ── Interaction ──────────────────────────────────────────────────────
@@ -224,10 +233,9 @@ class HistogramView(Gtk.DrawingArea):
 
     def _hit_test(self, x: float, y: float) -> tuple[_StatLike, float] | None:
         for bx, by, bw, bh, s in self._bar_rects:
-            # Hit the full row width, not just the drawn bar — UX clarity.
-            if by <= y <= by + bh and x >= bx:
-                if x <= bx + max(bw, 6):
-                    return s, by + bh
+            row_top = by - 5
+            if row_top <= y <= row_top + _ROW_H and x <= bx + max(bw, 6):
+                return s, by + bh
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
