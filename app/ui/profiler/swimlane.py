@@ -244,11 +244,11 @@ class SwimlaneView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         e = self._hit_test(x, y)
         if e is None:
-            if self._hovered_event is not None:
-                self._hovered_event = None
-                self._tooltip.hide()
+            self._hovered_event = None
+            self._tooltip.hide()
             return
         if e is self._hovered_event:
+            self._tooltip.update_position(x, y)
             return
         self._hovered_event = e
         dur_ms = (e["end"] - e["start"]) * 1000.0
@@ -267,7 +267,7 @@ class SwimlaneView(Gtk.DrawingArea):
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
         self._hovered_event = None
-        self._tooltip.hide()
+        self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
         e = self._hit_test(x, y)

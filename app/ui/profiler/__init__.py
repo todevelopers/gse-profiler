@@ -12,7 +12,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Gtk, Pango
+from gi.repository import GLib, Gtk, Pango
 
 # Bar colours per call depth (RGB, cycled).
 DEPTH_COLORS: list[tuple[float, float, float]] = [
@@ -104,6 +104,7 @@ class TooltipPopover:
         self._pop.set_autohide(False)
         self._pop.set_has_arrow(False)
         self._pop.add_css_class("prof-tooltip")
+        self._hide_timeout: int = 0
 
         self._title = Gtk.Label(xalign=0.0)
         self._title.add_css_class("prof-tooltip-fn")
@@ -139,24 +140,48 @@ class TooltipPopover:
             visible = i < n
             lk.get_parent().set_visible(visible)
 
-    def show_at(self, x: float, y: float, title: str, rows: list[tuple[str, str]]) -> None:
-        self._title.set_text(title)
-        self._ensure_rows(len(rows))
-        for (k, v), (lk, lv) in zip(rows, self._row_cache):
-            lk.set_text(k)
-            lv.set_text(v)
+    def _set_pointing_rect(self, x: float, y: float) -> None:
         rect = self._pop.get_pointing_to()[1]
         rect.x = int(x)
         rect.y = int(y)
         rect.width = 1
         rect.height = 1
         self._pop.set_pointing_to(rect)
+
+    def update_position(self, x: float, y: float) -> None:
+        """Move the anchor point without refreshing content or toggling visibility."""
+        self._set_pointing_rect(x, y)
+
+    def show_at(self, x: float, y: float, title: str, rows: list[tuple[str, str]]) -> None:
+        if self._hide_timeout:
+            GLib.source_remove(self._hide_timeout)
+            self._hide_timeout = 0
+        self._title.set_text(title)
+        self._ensure_rows(len(rows))
+        for (k, v), (lk, lv) in zip(rows, self._row_cache):
+            lk.set_text(k)
+            lv.set_text(v)
+        self._set_pointing_rect(x, y)
         if not self._pop.is_visible():
             self._pop.popup()
 
     def hide(self) -> None:
+        """Schedule hide after a short delay — absorbs brief boundary misses."""
+        if self._pop.is_visible() and not self._hide_timeout:
+            self._hide_timeout = GLib.timeout_add(80, self._do_hide)
+
+    def hide_immediate(self) -> None:
+        """Hide without delay — used when the cursor leaves the widget entirely."""
+        if self._hide_timeout:
+            GLib.source_remove(self._hide_timeout)
+            self._hide_timeout = 0
         if self._pop.is_visible():
             self._pop.popdown()
+
+    def _do_hide(self) -> bool:
+        self._hide_timeout = 0
+        self._pop.popdown()
+        return False
 
 
 __all__ = [

@@ -207,11 +207,11 @@ class HistogramView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         s = self._hit_test(x, y)
         if s is None:
-            if self._hovered_stat is not None:
-                self._hovered_stat = None
-                self._tooltip.hide()
+            self._hovered_stat = None
+            self._tooltip.hide()
             return
         if s is self._hovered_stat:
+            self._tooltip.update_position(x, y)
             return
         self._hovered_stat = s
         self._tooltip.show_at(
@@ -229,7 +229,7 @@ class HistogramView(Gtk.DrawingArea):
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
         self._hovered_stat = None
-        self._tooltip.hide()
+        self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
         s = self._hit_test(x, y)
