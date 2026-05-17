@@ -6,6 +6,7 @@ gap-segment computation used by the Swimlane, and a single `TooltipPopover`
 helper that wraps a `Gtk.Popover` for hover detail labels.
 """
 
+import math
 from typing import Any
 
 import gi
@@ -45,6 +46,22 @@ def desaturate_color(
         g + (gray - g) * amount,
         b + (gray - b) * amount,
     )
+
+
+def rounded_rect(cr: Any, x: float, y: float, w: float, h: float, r: float = 4.0) -> None:
+    """Draw a rounded-rectangle path (does not fill or stroke — caller decides)."""
+    r = min(r, w / 2.0, h / 2.0)
+    cr.new_path()
+    cr.move_to(x + r, y)
+    cr.line_to(x + w - r, y)
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.line_to(x + w, y + h - r)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.line_to(x + r, y + h)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.line_to(x, y + r)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
 
 
 def visible_segments(events: list[dict[str, Any]]) -> list[tuple[float, float]]:
@@ -193,6 +210,7 @@ __all__ = [
     "GAP_THRESHOLD_S",
     "GAP_BREAK_PX",
     "desaturate_color",
+    "rounded_rect",
     "visible_segments",
     "format_gap",
     "format_ms",

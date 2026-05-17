@@ -22,11 +22,12 @@ from . import (
     desaturate_color,
     format_gap,
     format_ms,
+    rounded_rect,
     visible_segments,
 )
 
 _LABEL_W = 160
-_ROW_H = 22
+_ROW_H = 28
 _PAD_TOP = 22
 _PAD_BOT = 8
 
@@ -170,10 +171,11 @@ class SwimlaneView(Gtk.DrawingArea):
         # Event bars — split across every segment they overlap.
         for e in self._events:
             row = seen[e["function"]]
-            y = _PAD_TOP + row * _ROW_H + 4
+            by = _PAD_TOP + row * _ROW_H + 4
             r, g, b = desaturate_color(*DEPTH_COLORS[e.get("depth", 0) % len(DEPTH_COLORS)])
-            alpha = 0.22 if self._is_dimmed(e["function"]) else 0.85
-            cr.set_source_rgba(r, g, b, alpha)
+            is_dimmed = self._is_dimmed(e["function"])
+            alpha = 0.22 if is_dimmed else 0.85
+            bar_h = _ROW_H - 8
             for seg_s, seg_e, x0, w in seg_layout:
                 if e["end"] <= seg_s or e["start"] >= seg_e:
                     continue
@@ -182,12 +184,24 @@ class SwimlaneView(Gtk.DrawingArea):
                     continue
                 piece_s = max(e["start"], seg_s)
                 piece_e = min(e["end"], seg_e)
-                x = x0 + (piece_s - seg_s) / seg_dur * w
-                bar_w = max((piece_e - piece_s) / seg_dur * w, 2.0)
-                bar_h = _ROW_H - 8
-                cr.rectangle(x, y, bar_w, bar_h)
-                cr.fill()
-                self._bar_rects.append((x, y, bar_w, bar_h, e))
+                bx = x0 + (piece_s - seg_s) / seg_dur * w
+                bw = max((piece_e - piece_s) / seg_dur * w, 2.0)
+                rounded_rect(cr, bx, by, bw, bar_h)
+                cr.set_source_rgba(r, g, b, alpha)
+                cr.fill_preserve()
+                if not is_dimmed:
+                    cr.set_source_rgba(r * 0.6, g * 0.6, b * 0.6, 0.5)
+                    cr.set_line_width(0.5)
+                    cr.stroke()
+                else:
+                    cr.new_path()
+                if e is self._hovered_event:
+                    rounded_rect(cr, bx, by, bw, bar_h)
+                    c_hi = (1.0, 1.0, 1.0) if dark else (0.05, 0.05, 0.05)
+                    cr.set_source_rgba(*c_hi, 0.9)
+                    cr.set_line_width(1.5)
+                    cr.stroke()
+                self._bar_rects.append((bx, by, bw, bar_h, e))
 
         # Segment-break visuals: two dashed verticals + gap-duration label.
         cr.set_source_rgb(*c_tick)
@@ -244,7 +258,9 @@ class SwimlaneView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         hit = self._hit_test(x, y)
         if hit is None:
-            self._hovered_event = None
+            if self._hovered_event is not None:
+                self._hovered_event = None
+                self.queue_draw()
             self._tooltip.hide()
             return
         e, bar_y = hit
@@ -252,6 +268,7 @@ class SwimlaneView(Gtk.DrawingArea):
             self._tooltip.update_position(x, bar_y)
             return
         self._hovered_event = e
+        self.queue_draw()
         dur_ms = (e["end"] - e["start"]) * 1000.0
         t0 = min((ev["start"] for ev in self._events), default=0.0)
         self._tooltip.show_at(
@@ -267,7 +284,9 @@ class SwimlaneView(Gtk.DrawingArea):
         )
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
-        self._hovered_event = None
+        if self._hovered_event is not None:
+            self._hovered_event = None
+            self.queue_draw()
         self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:

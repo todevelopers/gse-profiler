@@ -13,13 +13,13 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, GObject, Gtk
 
-from . import DEPTH_COLORS, TooltipPopover, desaturate_color, format_ms
+from . import DEPTH_COLORS, TooltipPopover, desaturate_color, format_ms, rounded_rect
 
 _PAD_LEFT = 8
 _PAD_RIGHT = 8
-_PAD_TOP = 22
+_PAD_TOP = 24
 _PAD_BOT = 8
-_ROW_H = 22
+_ROW_H = 28
 
 
 class FlamegraphView(Gtk.DrawingArea):
@@ -132,46 +132,75 @@ class FlamegraphView(Gtk.DrawingArea):
                 cr.rectangle(_PAD_LEFT, y, chart_w, _ROW_H)
                 cr.fill()
 
-        # Time-axis tick marks (6 intervals).
-        ticks = 6
+        # Time axis: solid baseline + tick marks + dashed guides.
         cr.set_source_rgb(*c_tick)
-        cr.set_line_width(0.5)
-        cr.set_dash([2, 4])
+        cr.set_line_width(0.75)
+        cr.set_dash([])
+        cr.move_to(_PAD_LEFT, _PAD_TOP - 2)
+        cr.line_to(_PAD_LEFT + chart_w, _PAD_TOP - 2)
+        cr.stroke()
+
+        ticks = 6
         for i in range(ticks + 1):
             t = t0 + (i / ticks) * span
             x = x_for(t)
-            cr.move_to(x, _PAD_TOP - 2)
-            cr.line_to(x, needed_h - _PAD_BOT)
-            cr.stroke()
             label = f"{(t - t0) * 1000.0:.0f} ms"
             ext = cr.text_extents(label)
-            lx = x + 3 if i < ticks else x - ext[2] - 3
-            cr.move_to(lx, _PAD_TOP - 6)
+            lx = x + 2 if i < ticks else x - ext[2] - 2
+            cr.set_source_rgb(*c_tick)
+            cr.set_line_width(0.75)
+            cr.set_dash([])
+            cr.move_to(x, _PAD_TOP - 7)
+            cr.line_to(x, _PAD_TOP - 2)
+            cr.stroke()
+            cr.move_to(lx, _PAD_TOP - 9)
             cr.show_text(label)
+            cr.set_source_rgba(*c_tick, 0.4)
+            cr.set_line_width(0.4)
+            cr.set_dash([2, 4])
+            cr.move_to(x, _PAD_TOP)
+            cr.line_to(x, needed_h - _PAD_BOT)
+            cr.stroke()
         cr.set_dash([])
 
         # Event bars.
         for e in self._events:
             depth = e.get("depth", 0)
-            x = x_for(e["start"])
-            w = max(x_for(e["end"]) - x, 1.5)
-            y = _PAD_TOP + depth * _ROW_H + 3
-            h = _ROW_H - 6
+            bx = x_for(e["start"])
+            bw = max(x_for(e["end"]) - bx, 2.0)
+            by = _PAD_TOP + depth * _ROW_H + 3
+            bh = _ROW_H - 6
 
             r, g, b = desaturate_color(*DEPTH_COLORS[depth % len(DEPTH_COLORS)])
-            alpha = 0.25 if self._is_dimmed(e["function"]) else 0.92
+            is_dimmed = self._is_dimmed(e["function"])
+            alpha = 0.25 if is_dimmed else 0.92
+
+            rounded_rect(cr, bx, by, bw, bh)
             cr.set_source_rgba(r, g, b, alpha)
-            cr.rectangle(x, y, w, h)
-            cr.fill()
-            self._bar_rects.append((x, y, w, h, e))
+            cr.fill_preserve()
+            if not is_dimmed:
+                cr.set_source_rgba(r * 0.6, g * 0.6, b * 0.6, 0.5)
+                cr.set_line_width(0.5)
+                cr.stroke()
+            else:
+                cr.new_path()
+
+            if e is self._hovered_event:
+                rounded_rect(cr, bx, by, bw, bh)
+                c_hi = (1.0, 1.0, 1.0) if dark else (0.05, 0.05, 0.05)
+                cr.set_source_rgba(*c_hi, 0.9)
+                cr.set_line_width(1.5)
+                cr.stroke()
+
+            self._bar_rects.append((bx, by, bw, bh, e))
 
             # Inline label when the bar is wide enough.
-            if w > 60 and alpha > 0.5:
+            if bw > 60 and not is_dimmed:
                 fn = e["function"]
-                max_chars = max(int(w / 7) - 1, 1)
+                max_chars = max(int(bw / 7) - 1, 1)
                 label = fn if len(fn) <= max_chars else fn[: max_chars - 1] + "…"
                 cr.set_source_rgba(*c_label, 0.95)
-                cr.move_to(x + 5, y + h - 6)
+                cr.move_to(bx + 5, by + bh // 2 + 4)
                 cr.show_text(label)
 
     # ── Interaction ──────────────────────────────────────────────────────
@@ -193,7 +222,9 @@ class FlamegraphView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         hit = self._hit_test(x, y)
         if hit is None:
-            self._hovered_event = None
+            if self._hovered_event is not None:
+                self._hovered_event = None
+                self.queue_draw()
             self._tooltip.hide()
             return
         e, bar_y = hit
@@ -201,6 +232,7 @@ class FlamegraphView(Gtk.DrawingArea):
             self._tooltip.update_position(x, bar_y)
             return
         self._hovered_event = e
+        self.queue_draw()
         dur_ms = (e["end"] - e["start"]) * 1000.0
         t0 = min((ev["start"] for ev in self._events), default=0.0)
         self._tooltip.show_at(
@@ -216,7 +248,9 @@ class FlamegraphView(Gtk.DrawingArea):
         )
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
-        self._hovered_event = None
+        if self._hovered_event is not None:
+            self._hovered_event = None
+            self.queue_draw()
         self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:

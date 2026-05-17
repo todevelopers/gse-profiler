@@ -13,13 +13,13 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, GObject, Gtk
 
-from . import TooltipPopover, desaturate_color, format_ms
+from . import TooltipPopover, desaturate_color, format_ms, rounded_rect
 
 _PAD_LEFT = 170
 _PAD_RIGHT = 100
-_PAD_TOP = 22
+_PAD_TOP = 24
 _PAD_BOT = 22
-_ROW_H = 22
+_ROW_H = 28
 _TOP_N = 18
 
 
@@ -135,20 +135,33 @@ class HistogramView(Gtk.DrawingArea):
         cr.select_font_face("monospace", 0, 0)
         cr.set_font_size(10)
 
-        # X-axis tick marks (5 intervals).
-        ticks = 5
+        # X-axis: solid baseline + tick marks + dashed guides.
         cr.set_source_rgb(*c_tick)
-        cr.set_line_width(0.5)
-        cr.set_dash([2, 4])
+        cr.set_line_width(0.75)
+        cr.set_dash([])
+        cr.move_to(_PAD_LEFT, _PAD_TOP - 2)
+        cr.line_to(_PAD_LEFT + chart_w, _PAD_TOP - 2)
+        cr.stroke()
+
+        ticks = 5
         for i in range(ticks + 1):
             v = (i / ticks) * max_self
             x = _PAD_LEFT + (v / max_self) * chart_w
-            cr.move_to(x, _PAD_TOP - 2)
+            label = f"{v:.1f} ms"
+            cr.set_source_rgb(*c_tick)
+            cr.set_line_width(0.75)
+            cr.set_dash([])
+            cr.move_to(x, _PAD_TOP - 7)
+            cr.line_to(x, _PAD_TOP - 2)
+            cr.stroke()
+            cr.move_to(x + 2, _PAD_TOP - 9)
+            cr.show_text(label)
+            cr.set_source_rgba(*c_tick, 0.4)
+            cr.set_line_width(0.4)
+            cr.set_dash([2, 4])
+            cr.move_to(x, _PAD_TOP)
             cr.line_to(x, needed_h - _PAD_BOT)
             cr.stroke()
-            label = f"{v:.1f} ms"
-            cr.move_to(x + 3, _PAD_TOP - 6)
-            cr.show_text(label)
         cr.set_dash([])
 
         # Rows.
@@ -166,7 +179,8 @@ class HistogramView(Gtk.DrawingArea):
             r, g, b = c_text
             cr.set_source_rgba(r, g, b, 0.30 if dimmed else 0.88)
             ext = cr.text_extents(label)
-            cr.move_to(_PAD_LEFT - 8 - ext[2], y + _ROW_H - 7)
+            label_y = y + _ROW_H // 2 + 4
+            cr.move_to(_PAD_LEFT - 8 - ext[2], label_y)
             cr.show_text(label)
 
             # Bar.
@@ -176,15 +190,27 @@ class HistogramView(Gtk.DrawingArea):
             w = max((s.self_ms / max_self) * chart_w, 2.0)
             bar_y = y + 5
             bar_h = _ROW_H - 10
+            rounded_rect(cr, _PAD_LEFT, bar_y, w, bar_h)
             cr.set_source_rgba(br, bg, bb, alpha)
-            cr.rectangle(_PAD_LEFT, bar_y, w, bar_h)
-            cr.fill()
+            cr.fill_preserve()
+            if not dimmed:
+                cr.set_source_rgba(br * 0.6, bg * 0.6, bb * 0.6, 0.5)
+                cr.set_line_width(0.5)
+                cr.stroke()
+            else:
+                cr.new_path()
+            if s is self._hovered_stat:
+                rounded_rect(cr, _PAD_LEFT, bar_y, w, bar_h)
+                c_hi = (1.0, 1.0, 1.0) if dark else (0.05, 0.05, 0.05)
+                cr.set_source_rgba(*c_hi, 0.9)
+                cr.set_line_width(1.5)
+                cr.stroke()
             self._bar_rects.append((_PAD_LEFT, bar_y, w, bar_h, s))
 
             # Trailing ms · count label.
             suffix = f"{format_ms(s.self_ms)} · {s.count}×"
             cr.set_source_rgba(r, g, b, 0.30 if dimmed else 0.68)
-            cr.move_to(_PAD_LEFT + w + 6, y + _ROW_H - 7)
+            cr.move_to(_PAD_LEFT + w + 6, label_y)
             cr.show_text(suffix)
 
     # ── Interaction ──────────────────────────────────────────────────────
@@ -207,7 +233,9 @@ class HistogramView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         hit = self._hit_test(x, y)
         if hit is None:
-            self._hovered_stat = None
+            if self._hovered_stat is not None:
+                self._hovered_stat = None
+                self.queue_draw()
             self._tooltip.hide()
             return
         s, bar_y = hit
@@ -215,6 +243,7 @@ class HistogramView(Gtk.DrawingArea):
             self._tooltip.update_position(x, bar_y)
             return
         self._hovered_stat = s
+        self.queue_draw()
         self._tooltip.show_at(
             x,
             bar_y,
@@ -229,7 +258,9 @@ class HistogramView(Gtk.DrawingArea):
         )
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
-        self._hovered_stat = None
+        if self._hovered_stat is not None:
+            self._hovered_stat = None
+            self.queue_draw()
         self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
