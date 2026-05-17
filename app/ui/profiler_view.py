@@ -455,14 +455,11 @@ class ProfilerView(Gtk.Stack):
         spacer.set_hexpand(True)
         head.append(spacer)
 
-        # Info button — shows a tooltip describing the current graph mode.
-        self._info_btn = Gtk.Button()
-        self._info_btn.set_icon_name("dialog-information-symbolic")
-        self._info_btn.add_css_class("flat")
-        self._info_btn.add_css_class("prof-info-btn")
-        self._info_btn.set_tooltip_text(_MODE_HINTS[self._mode])
-        self._info_btn.set_can_focus(False)
-        head.append(self._info_btn)
+        # Info icon — shows a tooltip describing the current graph mode.
+        self._info_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        self._info_icon.add_css_class("prof-info-btn")
+        self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
+        head.append(self._info_icon)
 
         # Mode tabs — three ToggleButtons grouped so exactly one is active.
         tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
@@ -520,7 +517,7 @@ class ProfilerView(Gtk.Stack):
             return
         self._mode = mode
         self._tl_stack.set_visible_child_name(mode)
-        self._info_btn.set_tooltip_text(_MODE_HINTS[mode])
+        self._info_icon.set_tooltip_text(_MODE_HINTS[mode])
         _save_settings({"mode": mode})
         self._update_active_graph()
 
@@ -559,12 +556,9 @@ class ProfilerView(Gtk.Stack):
         self._fn_caption.add_css_class("prof-section-sub")
         box.append(self._fn_caption)
 
-        fn_info = Gtk.Button()
-        fn_info.set_icon_name("dialog-information-symbolic")
-        fn_info.add_css_class("flat")
+        fn_info = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
         fn_info.add_css_class("prof-info-btn")
         fn_info.set_tooltip_text(_FN_HINT)
-        fn_info.set_can_focus(False)
         box.append(fn_info)
 
         spacer = Gtk.Box()
