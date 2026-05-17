@@ -1,7 +1,7 @@
 # PLAN.md — gse-profiler Implementation Plan
 
-Each phase ends in a working, testable state. Phases 0–7 are **V1 scope**.
-Phases 8–12 go beyond V1 with constructive additions.
+Each phase ends in a working, testable state. **Phases 0–6 are V1 scope** — the app is nearly release-ready.
+Phases 7–12 go beyond V1 with constructive additions.
 
 ---
 
@@ -104,7 +104,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ## Phase 4: Profiler V1 ✅
 
-**Goal:** Live function timing for a selected extension.
+**Goal:** Live function timing for a selected extension with flame graph visualization.
 
 ### Bridge side
 
@@ -119,7 +119,11 @@ Phases 8–12 go beyond V1 with constructive additions.
 - [x] Profiler UI
   - Start / stop profiling controls (select target extension from dropdown)
   - Call table (`GtkColumnView`): function name, call count, total ms, avg ms, max ms — sortable
-  - Timeline view (simple horizontal bar chart per function, sorted by start time)
+  - Flame graph (`Gtk.DrawingArea` + Cairo): horizontal axis = time, vertical axis = call depth
+    - Each bar labeled with function name (clipped to fit)
+    - Zoom (mouse wheel), pan (click-drag), hover tooltip
+    - Click to filter call table to selected function
+    - Hide-idle toggle with log-scale gap compression
 - [x] Save profile to JSON file (`Gio.File`)
 - [x] Load profile from JSON file + same visualization
 - [x] Clear / reset profiling data
@@ -150,7 +154,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 > **Descoped from V1:** inline property editing was prototyped but cut because
 > the bridge would have needed full path-aware writes plus `Gio.Settings`
-> support to be useful. See Phase 13 for the full plan.
+> support to be useful. See Phase 12 for the full plan.
 
 ---
 
@@ -171,44 +175,13 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 7: opt-in Developer API
+## 🚀 V1 Release
 
-**Goal:** Extension developers can integrate for deeper profiling.
-
-- [ ] `api/devtools-api.js` — `DevToolsClient` class
-  - `connect(uuid)` — find and connect to bridge socket
-  - `disconnect()`
-  - `mark(name)` — timestamp marker
-  - `measure(name, startMark, endMark)` — range from two marks
-  - `counter(name, value)` — increment custom metric
-  - `watch(object, properties)` — emit event on property change
-  - All methods: silent no-op when not connected (no exceptions thrown)
-- [ ] Bridge routes `devtools_*` message types to profiler subsystem
-- [ ] App Profiler view displays API-originated events distinctly (different color)
-- [ ] JSDoc comments on all public API methods
-- [ ] README section: "opt-in Developer API" with copy-paste example
+> Phases 0–6 complete → tag `v1.0.0`, publish GitHub Release with tarball + changelog.
 
 ---
 
-## Phase 8: Flame Graph (V2)
-
-**Goal:** Visual call-stack flame graph for profiling data.
-
-- [ ] Build flame graph data structure from recorded profile events (call depth + timing)
-- [ ] Custom `Gtk.DrawingArea` widget rendered with Cairo
-  - Horizontal axis = time, vertical axis = call depth
-  - Each bar labeled with function name (clipped to fit)
-  - Color coding by call depth or by extension module
-- [ ] Interaction
-  - Zoom: mouse wheel on time axis
-  - Pan: click-drag
-  - Hover tooltip: function name, total time, % of parent
-  - Click to filter call table to selected function
-- [ ] Export as SVG or PNG (`cairo.SVGSurface` / `cairo.ImageSurface`)
-
----
-
-## Phase 9: Memory Profiling (V2)
+## Phase 7: Memory Profiling (V2)
 
 **Goal:** Heap snapshots and allocation tracking.
 
@@ -220,7 +193,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 10: Extension Health & Linting (V2+)
+## Phase 8: Extension Health & Linting (V2+)
 
 **Goal:** Automated quality checks surfaced in the UI.
 
@@ -235,7 +208,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 11: Settings & Polish (V2+)
+## Phase 9: Settings & Polish (V2+)
 
 - [ ] `AdwPreferencesWindow`
   - Theme: follow system / force dark / force light
@@ -252,7 +225,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 12: Packaging & Distribution (V2+)
+## Phase 10: Packaging & Distribution (V2+)
 
 - [ ] AppStream metadata (`app/data/org.gnome.GSEProfiler.appdata.xml`)
 - [ ] `.desktop` entry (`gse-profiler.desktop`)
@@ -266,7 +239,7 @@ Phases 8–12 go beyond V1 with constructive additions.
 
 ---
 
-## Phase 13: Inspector V2 — Writable Properties (V2+)
+## Phase 11: Inspector V2 — Writable Properties (V2+)
 
 **Goal:** Bring back inline editing of extension state in a way that actually
 works across the whole tree, not just the root level.
@@ -319,24 +292,37 @@ means read-only for V1 clients.
 
 ---
 
+## Deferred — opt-in Developer API
+
+> **Status: deferred indefinitely.** The core tooling covers the developer use-case well enough for V1 and V2. Revisit only if there is concrete demand.
+
+**Original goal:** Extension developers integrate `DevToolsClient` for custom profiling marks, counters, and property watches.
+
+- `api/devtools-api.js` — `DevToolsClient` with `connect`, `mark`, `measure`, `counter`, `watch`
+- Bridge routes `devtools_*` message types to profiler subsystem
+- App displays API-originated events in a distinct colour
+- All methods: silent no-op when not connected
+
+---
+
 ## Milestone Summary
 
-| Phase | Milestone           | Scope                       |
-| ----- | ------------------- | --------------------------- |
-| 0     | Skeleton + CI       | Project setup               |
-| 1     | Extension Manager   | List, enable/disable        |
-| 2     | Bridge + Socket     | App ↔ Shell IPC             |
-| 3     | Log Viewer          | Live filtered logs          |
-| 4     | Profiler V1         | Function timing table       |
-| 5     | Inspector           | stateObj live view (R/O)    |
-| 6     | GitHub clone        | Install extensions          |
-| 7     | opt-in API          | Developer integration       |
-| 8     | Flame graph         | Visual profiling (V2)       |
-| 9     | Memory profiling    | Heap analysis (V2)          |
-| 10    | Health checks       | Linting + validation (V2+)  |
-| 11    | Settings + Polish   | UX completeness (V2+)       |
-| 12    | Packaging           | Flatpak + releases (V2+)    |
-| 13    | Inspector writable  | Full property editing (V2+) |
+| Phase | Milestone             | Scope                         | Status       |
+| ----- | --------------------- | ----------------------------- | ------------ |
+| 0     | Skeleton + CI         | Project setup                 | ✅ done      |
+| 1     | Extension Manager     | List, enable/disable          | ✅ done      |
+| 2     | Bridge + Socket       | App ↔ Shell IPC               | ✅ done      |
+| 3     | Log Viewer            | Live filtered logs            | ✅ done      |
+| 4     | Profiler V1           | Timing table + flame graph    | ✅ done      |
+| 5     | Inspector             | stateObj live view (R/O)      | ✅ done      |
+| 6     | GitHub clone          | Install extensions            | in progress  |
+| —     | **V1 Release**        | **tag v1.0.0**                | **upcoming** |
+| 7     | Memory profiling      | Heap analysis (V2)            | planned      |
+| 8     | Health checks         | Linting + validation (V2+)    | planned      |
+| 9     | Settings + Polish     | UX completeness (V2+)         | planned      |
+| 10    | Packaging             | Flatpak + releases (V2+)      | planned      |
+| 11    | Inspector writable    | Full property editing (V2+)   | planned      |
+| —     | opt-in Developer API  | Extension author integration  | deferred ∞   |
 
 ---
 
@@ -363,14 +349,5 @@ and may be disabled in future GNOME versions. All deep operations go through the
   "start": 1714901234.123456,
   "end":   1714901234.456789,
   "depth": 2
-}
-```
-
-### No-op pattern for devtools-api.js
-
-```javascript
-mark(name) {
-    if (!this._connected) return;
-    this._send({ type: 'devtools_mark', name, ts: Date.now() });
 }
 ```
