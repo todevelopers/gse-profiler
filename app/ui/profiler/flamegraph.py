@@ -157,9 +157,7 @@ class FlamegraphView(Gtk.DrawingArea):
             y = _PAD_TOP + depth * _ROW_H + 3
             h = _ROW_H - 6
 
-            r, g, b = DEPTH_COLORS[depth % len(DEPTH_COLORS)]
-            if dark:
-                r, g, b = desaturate_color(r, g, b)
+            r, g, b = desaturate_color(*DEPTH_COLORS[depth % len(DEPTH_COLORS)])
             alpha = 0.25 if self._is_dimmed(e["function"]) else 0.92
             cr.set_source_rgba(r, g, b, alpha)
             cr.rectangle(x, y, w, h)

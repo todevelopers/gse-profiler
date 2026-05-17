@@ -170,9 +170,7 @@ class SwimlaneView(Gtk.DrawingArea):
         for e in self._events:
             row = seen[e["function"]]
             y = _PAD_TOP + row * _ROW_H + 4
-            r, g, b = DEPTH_COLORS[e.get("depth", 0) % len(DEPTH_COLORS)]
-            if dark:
-                r, g, b = desaturate_color(r, g, b)
+            r, g, b = desaturate_color(*DEPTH_COLORS[e.get("depth", 0) % len(DEPTH_COLORS)])
             alpha = 0.22 if self._is_dimmed(e["function"]) else 0.85
             cr.set_source_rgba(r, g, b, alpha)
             for seg_s, seg_e, x0, w in seg_layout:

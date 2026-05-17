@@ -94,15 +94,15 @@ class HistogramView(Gtk.DrawingArea):
             c_row_alt  = (0.16, 0.16, 0.20)
             c_text     = (0.88, 0.88, 0.88)
             c_tick     = (0.55, 0.55, 0.55)
-            c_bar      = desaturate_color(0.21, 0.52, 0.89)  # accent blue, muted for dark bg
-            c_hot      = desaturate_color(0.90, 0.18, 0.20)  # error red, muted for dark bg
+            c_bar      = desaturate_color(0.21, 0.52, 0.89)
+            c_hot      = desaturate_color(0.90, 0.18, 0.20)
         else:
             c_bg       = (1.00, 1.00, 1.00)
             c_row_alt  = (0.96, 0.96, 0.98)
             c_text     = (0.12, 0.12, 0.12)
             c_tick     = (0.35, 0.35, 0.35)
-            c_bar      = (0.21, 0.52, 0.89)
-            c_hot      = (0.85, 0.10, 0.15)
+            c_bar      = desaturate_color(0.21, 0.52, 0.89)
+            c_hot      = desaturate_color(0.85, 0.10, 0.15)
 
         self._bar_rects.clear()
 

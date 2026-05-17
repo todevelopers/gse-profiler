@@ -15,6 +15,7 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
+from app.ui.profiler import desaturate_color
 from app.ui.profiler.flamegraph import FlamegraphView
 from app.ui.profiler.histogram import HistogramView
 from app.ui.profiler.swimlane import SwimlaneView
@@ -670,11 +671,11 @@ class ProfilerView(Gtk.Stack):
         is_hot = pct_total > 0.7
         is_warm = pct_total > 0.4
         if is_hot:
-            base = (0.90, 0.18, 0.20)  # error red
+            base = desaturate_color(0.90, 0.18, 0.20)
         elif is_warm:
-            base = (0.90, 0.65, 0.04)  # warning amber
+            base = desaturate_color(0.90, 0.65, 0.04)
         else:
-            base = (0.21, 0.52, 0.89)  # accent blue
+            base = desaturate_color(0.21, 0.52, 0.89)
 
         bar_h = 6
         y = (height - bar_h) / 2
