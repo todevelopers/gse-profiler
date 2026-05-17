@@ -238,7 +238,7 @@ class SwimlaneView(Gtk.DrawingArea):
     def _hit_test(self, x: float, y: float) -> tuple[dict[str, Any], float] | None:
         for bx, by, bw, bh, e in self._bar_rects:
             if bx <= x <= bx + bw and by <= y <= by + bh:
-                return e, by
+                return e, by + bh
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:

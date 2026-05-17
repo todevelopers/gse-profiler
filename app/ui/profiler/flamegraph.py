@@ -187,7 +187,7 @@ class FlamegraphView(Gtk.DrawingArea):
         # Search from the end so the most recently-drawn (topmost) bar wins.
         for bx, by, bw, bh, e in reversed(self._bar_rects):
             if bx <= x <= bx + bw and by <= y <= by + bh:
-                return e, by
+                return e, by + bh
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:

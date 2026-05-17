@@ -104,7 +104,7 @@ class TooltipPopover:
         self._pop.set_autohide(False)
         self._pop.set_has_arrow(False)
         self._pop.set_can_target(False)
-        self._pop.set_position(Gtk.PositionType.TOP)
+        self._pop.set_position(Gtk.PositionType.BOTTOM)
         self._pop.add_css_class("prof-tooltip")
         self._hide_timeout: int = 0
 

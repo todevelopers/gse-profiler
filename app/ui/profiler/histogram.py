@@ -201,7 +201,7 @@ class HistogramView(Gtk.DrawingArea):
             # Hit the full row width, not just the drawn bar — UX clarity.
             if by <= y <= by + bh and x >= bx:
                 if x <= bx + max(bw, 6):
-                    return s, by
+                    return s, by + bh
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
