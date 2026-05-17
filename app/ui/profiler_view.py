@@ -114,7 +114,7 @@ class ProfilerView(Gtk.Stack):
         settings = _load_settings()
         mode = settings.get("mode", _DEFAULT_MODE)
         self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
-        self._tl_height: int = int(settings.get("tl_height", 360))
+        self._tl_height: int = int(settings.get("tl_height", 240))
         self._tl_scrolls: list[Gtk.ScrolledWindow] = []
         self._tl_drag_start_height: int = 0
 
@@ -416,7 +416,7 @@ class ProfilerView(Gtk.Stack):
 
         # Stack of three views, each in its own scrolled window.
         self._tl_stack = Gtk.Stack()
-        self._tl_stack.set_vexpand(True)
+        self._tl_stack.set_size_request(-1, self._tl_height)
         self._tl_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         self._tl_stack.set_transition_duration(120)
 
@@ -435,7 +435,7 @@ class ProfilerView(Gtk.Stack):
         ):
             sw = Gtk.ScrolledWindow()
             sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            sw.set_min_content_height(self._tl_height)
+            sw.set_vexpand(True)
             sw.set_child(widget)
             self._tl_stack.add_named(sw, name)
             self._tl_scrolls.append(sw)
@@ -483,8 +483,7 @@ class ProfilerView(Gtk.Stack):
         if new_h == self._tl_height:
             return
         self._tl_height = new_h
-        for sw in self._tl_scrolls:
-            sw.set_min_content_height(new_h)
+        self._tl_stack.set_size_request(-1, new_h)
 
     def _on_tl_drag_end(self, _gesture: Gtk.GestureDrag, _dx: float, _dy: float) -> None:
         _save_settings({"tl_height": self._tl_height})
