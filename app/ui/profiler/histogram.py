@@ -90,8 +90,8 @@ class HistogramView(Gtk.DrawingArea):
     def _draw(self, _area: Gtk.DrawingArea, cr: Any, width: int, _height: int) -> None:
         dark = Adw.StyleManager.get_default().get_dark()
         if dark:
-            c_bg       = (0.12, 0.12, 0.15)
-            c_row_alt  = (0.16, 0.16, 0.20)
+            c_bg       = (0.12, 0.12, 0.12)
+            c_row_alt  = (0.16, 0.16, 0.16)
             c_text     = (0.88, 0.88, 0.88)
             c_tick     = (0.55, 0.55, 0.55)
             c_bar      = desaturate_color(0.21, 0.52, 0.89)
