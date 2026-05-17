@@ -50,6 +50,7 @@ class HistogramView(Gtk.DrawingArea):
         self._filter_text: str = ""
 
         self._bar_rects: list[tuple[float, float, float, float, _StatLike]] = []
+        self._hovered_stat: _StatLike | None = None
 
         self.set_hexpand(True)
         self.set_content_height(140)
@@ -206,8 +207,13 @@ class HistogramView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         s = self._hit_test(x, y)
         if s is None:
-            self._tooltip.hide()
+            if self._hovered_stat is not None:
+                self._hovered_stat = None
+                self._tooltip.hide()
             return
+        if s is self._hovered_stat:
+            return
+        self._hovered_stat = s
         self._tooltip.show_at(
             x,
             y,
@@ -222,6 +228,7 @@ class HistogramView(Gtk.DrawingArea):
         )
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
+        self._hovered_stat = None
         self._tooltip.hide()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:

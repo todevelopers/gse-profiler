@@ -49,6 +49,7 @@ class SwimlaneView(Gtk.DrawingArea):
 
         # Hit-test cache: (x, y, w, h, event)
         self._bar_rects: list[tuple[float, float, float, float, dict[str, Any]]] = []
+        self._hovered_event: dict[str, Any] | None = None
 
         self.set_hexpand(True)
         self.set_content_height(140)
@@ -243,8 +244,13 @@ class SwimlaneView(Gtk.DrawingArea):
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
         e = self._hit_test(x, y)
         if e is None:
-            self._tooltip.hide()
+            if self._hovered_event is not None:
+                self._hovered_event = None
+                self._tooltip.hide()
             return
+        if e is self._hovered_event:
+            return
+        self._hovered_event = e
         dur_ms = (e["end"] - e["start"]) * 1000.0
         t0 = min((ev["start"] for ev in self._events), default=0.0)
         self._tooltip.show_at(
@@ -260,6 +266,7 @@ class SwimlaneView(Gtk.DrawingArea):
         )
 
     def _on_leave(self, _ctrl: Gtk.EventControllerMotion) -> None:
+        self._hovered_event = None
         self._tooltip.hide()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
