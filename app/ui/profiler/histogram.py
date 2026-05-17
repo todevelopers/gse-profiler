@@ -196,27 +196,28 @@ class HistogramView(Gtk.DrawingArea):
             return True
         return False
 
-    def _hit_test(self, x: float, y: float) -> _StatLike | None:
+    def _hit_test(self, x: float, y: float) -> tuple[_StatLike, float] | None:
         for bx, by, bw, bh, s in self._bar_rects:
             # Hit the full row width, not just the drawn bar — UX clarity.
             if by <= y <= by + bh and x >= bx:
                 if x <= bx + max(bw, 6):
-                    return s
+                    return s, by + bh * 0.5
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
-        s = self._hit_test(x, y)
-        if s is None:
+        hit = self._hit_test(x, y)
+        if hit is None:
             self._hovered_stat = None
             self._tooltip.hide()
             return
+        s, bar_y = hit
         if s is self._hovered_stat:
-            self._tooltip.update_position(x, y)
+            self._tooltip.update_position(x, bar_y)
             return
         self._hovered_stat = s
         self._tooltip.show_at(
             x,
-            y,
+            bar_y,
             s.name,
             [
                 ("Total", format_ms(s.total_ms)),
@@ -232,8 +233,9 @@ class HistogramView(Gtk.DrawingArea):
         self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
-        s = self._hit_test(x, y)
-        if s is None:
+        hit = self._hit_test(x, y)
+        if hit is None:
             return
+        s, _ = hit
         new = "" if s.name == self._selected_fn else s.name
         self.emit("function-selected", new)
