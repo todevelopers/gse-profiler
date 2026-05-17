@@ -148,6 +148,8 @@ class FlamegraphView(Gtk.DrawingArea):
                 cr.fill()
 
         # Time axis: solid baseline per active lane + tick marks + dashed guides.
+        # last_label_end_x suppresses labels that would overlap the previous one.
+        last_label_end_x = -1000.0
         for lane in active_lanes:
             x0 = _PAD_LEFT + lane["x"]
             cr.set_source_rgb(*c_tick)
@@ -167,8 +169,10 @@ class FlamegraphView(Gtk.DrawingArea):
                 cr.move_to(x, _PAD_TOP - 7)
                 cr.line_to(x, _PAD_TOP - 2)
                 cr.stroke()
-                cr.move_to(lx, _PAD_TOP - 9)
-                cr.show_text(label)
+                if lx >= last_label_end_x + 4:
+                    cr.move_to(lx, _PAD_TOP - 9)
+                    cr.show_text(label)
+                    last_label_end_x = lx + ext[2]
                 cr.set_source_rgba(*c_tick, 0.4)
                 cr.set_line_width(0.4)
                 cr.set_dash([2, 4])
