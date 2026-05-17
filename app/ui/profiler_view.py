@@ -11,7 +11,7 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
@@ -46,8 +46,15 @@ def _load_settings() -> dict[str, Any]:
 
 def _save_settings(data: dict[str, Any]) -> None:
     p = _settings_path()
+    existing: dict[str, Any] = {}
+    if p.exists():
+        try:
+            existing = cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    existing.update(data)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    p.write_text(json.dumps(existing, indent=2), encoding="utf-8")
 
 
 def _fmt_ms(v: float) -> str:
@@ -107,6 +114,9 @@ class ProfilerView(Gtk.Stack):
         settings = _load_settings()
         mode = settings.get("mode", _DEFAULT_MODE)
         self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
+        self._tl_height: int = int(settings.get("tl_height", 360))
+        self._tl_scrolls: list[Gtk.ScrolledWindow] = []
+        self._tl_drag_start_height: int = 0
 
         self._store: Gio.ListStore = Gio.ListStore(item_type=FunctionStat)
 
@@ -417,6 +427,7 @@ class ProfilerView(Gtk.Stack):
         self._histogram = HistogramView()
         self._histogram.connect("function-selected", self._on_graph_selected)
 
+        self._tl_scrolls = []
         for name, widget in (
             ("flamegraph", self._flamegraph),
             ("swimlane", self._swimlane),
@@ -424,12 +435,32 @@ class ProfilerView(Gtk.Stack):
         ):
             sw = Gtk.ScrolledWindow()
             sw.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-            sw.set_min_content_height(360)
+            sw.set_min_content_height(self._tl_height)
             sw.set_child(widget)
             self._tl_stack.add_named(sw, name)
+            self._tl_scrolls.append(sw)
         self._tl_stack.set_visible_child_name(self._mode)
 
         outer.append(self._tl_stack)
+
+        # Resize grip — drag it vertically to change the timeline height.
+        grip = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        grip.add_css_class("prof-tl-grip")
+        grip.set_cursor(Gdk.Cursor.new_from_name("ns-resize", None))
+
+        handle = Gtk.Box()
+        handle.add_css_class("prof-tl-grip-handle")
+        handle.set_halign(Gtk.Align.CENTER)
+        handle.set_valign(Gtk.Align.CENTER)
+        grip.append(handle)
+
+        drag = Gtk.GestureDrag()
+        drag.connect("drag-begin", self._on_tl_drag_begin)
+        drag.connect("drag-update", self._on_tl_drag_update)
+        drag.connect("drag-end", self._on_tl_drag_end)
+        grip.add_controller(drag)
+
+        outer.append(grip)
         return frame
 
     def _on_mode_toggled(self, btn: Gtk.ToggleButton, mode: str) -> None:
@@ -441,6 +472,22 @@ class ProfilerView(Gtk.Stack):
         self._tl_stack.set_visible_child_name(mode)
         _save_settings({"mode": mode})
         self._update_active_graph()
+
+    # ── Timeline resize grip ──────────────────────────────────────────────
+
+    def _on_tl_drag_begin(self, _gesture: Gtk.GestureDrag, _x: float, _y: float) -> None:
+        self._tl_drag_start_height = self._tl_height
+
+    def _on_tl_drag_update(self, _gesture: Gtk.GestureDrag, _dx: float, dy: float) -> None:
+        new_h = max(120, self._tl_drag_start_height + int(dy))
+        if new_h == self._tl_height:
+            return
+        self._tl_height = new_h
+        for sw in self._tl_scrolls:
+            sw.set_min_content_height(new_h)
+
+    def _on_tl_drag_end(self, _gesture: Gtk.GestureDrag, _dx: float, _dy: float) -> None:
+        _save_settings({"tl_height": self._tl_height})
 
     # ── Functions section header (filter search) ─────────────────────────
 
