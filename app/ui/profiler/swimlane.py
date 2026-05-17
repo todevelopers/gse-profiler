@@ -210,7 +210,8 @@ class SwimlaneView(Gtk.DrawingArea):
                     cr.stroke()
                 else:
                     cr.new_path()
-                if e is self._hovered_event:
+                if (self._hovered_event is not None
+                        and e["function"] == self._hovered_event["function"]):
                     rounded_rect(cr, bx, by, bw, bar_h)
                     c_hi = (1.0, 1.0, 1.0) if dark else (0.05, 0.05, 0.05)
                     cr.set_source_rgba(*c_hi, 0.9)
@@ -238,22 +239,36 @@ class SwimlaneView(Gtk.DrawingArea):
             cr.show_text(gap_label)
             cr.set_font_size(10)
 
-        # Time axis: per-segment start/end labels (relative to overall start).
+        # Time axis: solid baseline per segment + tick marks + dashed guides.
         t0 = segments[0][0]
-        cr.set_source_rgb(*c_tick)
-        cr.set_line_width(0.5)
         for seg_s, seg_e, x0, w in seg_layout:
+            cr.set_source_rgb(*c_tick)
+            cr.set_line_width(0.75)
+            cr.set_dash([])
+            cr.move_to(x0, _PAD_TOP - 2)
+            cr.line_to(x0 + w, _PAD_TOP - 2)
+            cr.stroke()
             for frac, t_real in ((0.0, seg_s), (1.0, seg_e)):
                 x = x0 + frac * w
-                cr.move_to(x, _PAD_TOP - 2)
-                cr.line_to(x, needed_h - _PAD_BOT)
-                cr.stroke()
                 t_ms = (t_real - t0) * 1000.0
                 label = f"{t_ms:.1f}ms"
                 ext = cr.text_extents(label)
                 lx = x + 2 if frac == 0.0 else x - ext[2] - 2
-                cr.move_to(lx, _PAD_TOP - 6)
+                cr.set_source_rgb(*c_tick)
+                cr.set_line_width(0.75)
+                cr.set_dash([])
+                cr.move_to(x, _PAD_TOP - 7)
+                cr.line_to(x, _PAD_TOP - 2)
+                cr.stroke()
+                cr.move_to(lx, _PAD_TOP - 9)
                 cr.show_text(label)
+                cr.set_source_rgba(*c_tick, 0.4)
+                cr.set_line_width(0.4)
+                cr.set_dash([2, 4])
+                cr.move_to(x, _PAD_TOP)
+                cr.line_to(x, needed_h - _PAD_BOT)
+                cr.stroke()
+        cr.set_dash([])
 
     # ── Interaction ──────────────────────────────────────────────────────
 
