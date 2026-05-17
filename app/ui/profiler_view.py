@@ -117,6 +117,7 @@ class ProfilerView(Gtk.Stack):
         raw_pos = settings.get("paned_pos")
         self._paned_pos: int | None = int(raw_pos) if raw_pos is not None else None
         self._paned_save_id: int = 0
+        self._paned_default_set: bool = False
 
         self._store: Gio.ListStore = Gio.ListStore(item_type=FunctionStat)
 
@@ -484,11 +485,13 @@ class ProfilerView(Gtk.Stack):
     # ── Paned position persistence ────────────────────────────────────────
 
     def _on_paned_height_notify(self, paned: Gtk.Paned, _param: GObject.ParamSpec) -> None:
+        if self._paned_default_set:
+            return
         h = paned.get_height()
         if h <= 0:
             return
+        self._paned_default_set = True
         paned.set_position(h // 2)
-        paned.disconnect_by_func(self._on_paned_height_notify)
 
     def _on_paned_position_notify(self, _paned: Gtk.Paned, _param: GObject.ParamSpec) -> None:
         if self._paned_save_id:
@@ -560,7 +563,7 @@ class ProfilerView(Gtk.Stack):
         self._sort_model = sort_model
 
         scroll = Gtk.ScrolledWindow()
-        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.NEVER)
+        scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
         scroll.set_child(col_view)
         return scroll
