@@ -26,7 +26,8 @@ from . import (
     visible_segments,
 )
 
-_LABEL_W = 160
+_LABEL_W_MIN = 80
+_LABEL_W_MAX = 220
 _ROW_H = 28
 _PAD_TOP = 22
 _PAD_BOT = 8
@@ -126,25 +127,33 @@ class SwimlaneView(Gtk.DrawingArea):
             if fn not in seen:
                 seen[fn] = len(seen)
 
-        chart_w = max(width - _LABEL_W - 4, 1)
+        cr.select_font_face("monospace", 0, 0)
+        cr.set_font_size(10)
+        char_w = cr.text_extents("m")[2]
+        max_name_px = max((cr.text_extents(fn)[2] for fn in seen), default=float(_LABEL_W_MIN))
+        label_w = int(min(max_name_px, _LABEL_W_MAX)) + 16
+
+        chart_w = max(width - label_w - 4, 1)
         seg_total_px = max(chart_w - n_breaks * GAP_BREAK_PX, 10)
         needed_h = _PAD_TOP + len(seen) * _ROW_H + _PAD_BOT
         self.set_content_height(max(needed_h, 140))
 
         # Lay out segments in display space: (seg_start, seg_end, x0, w_px).
         seg_layout: list[tuple[float, float, float, float]] = []
-        x_cursor = float(_LABEL_W)
+        x_cursor = float(label_w)
         for seg_s, seg_e in segments:
             seg_w_px = (seg_e - seg_s) / active_total * seg_total_px
             seg_layout.append((seg_s, seg_e, x_cursor, seg_w_px))
             x_cursor += seg_w_px + GAP_BREAK_PX
 
-        cr.select_font_face("monospace", 0, 0)
-        cr.set_font_size(10)
-
         # Background.
         cr.set_source_rgb(*c_bg)
         cr.paint()
+
+        fn_first_event: dict[str, dict] = {}
+        for e in self._events:
+            if e["function"] not in fn_first_event:
+                fn_first_event[e["function"]] = e
 
         # Alternating row backgrounds and function labels.
         for fn, row in seen.items():
@@ -153,12 +162,18 @@ class SwimlaneView(Gtk.DrawingArea):
                 cr.set_source_rgb(*c_row_alt)
                 cr.rectangle(0, y, width, _ROW_H)
                 cr.fill()
-            label = fn if len(fn) <= 23 else f"…{fn[-22:]}"
+            avail_w = label_w - 8
+            if cr.text_extents(fn)[2] <= avail_w:
+                label = fn
+            else:
+                max_chars = max(1, int((avail_w - cr.text_extents("…")[2]) / char_w))
+                label = fn[:max_chars] + "…"
             dimmed = self._is_dimmed(fn)
             r, g, b = c_text
             cr.set_source_rgba(r, g, b, 0.30 if dimmed else 0.95)
             cr.move_to(4, y + _ROW_H - 5)
             cr.show_text(label)
+            self._bar_rects.append((0.0, float(y + 4), float(label_w), float(_ROW_H - 8), fn_first_event[fn]))
 
         # Shade the collapsed-gap "break" columns.
         for i in range(n_breaks):
