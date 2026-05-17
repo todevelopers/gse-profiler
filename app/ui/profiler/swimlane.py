@@ -235,27 +235,28 @@ class SwimlaneView(Gtk.DrawingArea):
             return True
         return False
 
-    def _hit_test(self, x: float, y: float) -> dict[str, Any] | None:
+    def _hit_test(self, x: float, y: float) -> tuple[dict[str, Any], float] | None:
         for bx, by, bw, bh, e in self._bar_rects:
             if bx <= x <= bx + bw and by <= y <= by + bh:
-                return e
+                return e, by
         return None
 
     def _on_motion(self, _ctrl: Gtk.EventControllerMotion, x: float, y: float) -> None:
-        e = self._hit_test(x, y)
-        if e is None:
+        hit = self._hit_test(x, y)
+        if hit is None:
             self._hovered_event = None
             self._tooltip.hide()
             return
+        e, bar_y = hit
         if e is self._hovered_event:
-            self._tooltip.update_position(x, y)
+            self._tooltip.update_position(x, bar_y)
             return
         self._hovered_event = e
         dur_ms = (e["end"] - e["start"]) * 1000.0
         t0 = min((ev["start"] for ev in self._events), default=0.0)
         self._tooltip.show_at(
             x,
-            y,
+            bar_y,
             e["function"],
             [
                 ("Duration", format_ms(dur_ms)),
@@ -270,9 +271,10 @@ class SwimlaneView(Gtk.DrawingArea):
         self._tooltip.hide_immediate()
 
     def _on_click(self, _ctrl: Gtk.GestureClick, _n: int, x: float, y: float) -> None:
-        e = self._hit_test(x, y)
-        if e is None:
+        hit = self._hit_test(x, y)
+        if hit is None:
             return
+        e, _ = hit
         fn = e["function"]
         new = "" if fn == self._selected_fn else fn
         self.emit("function-selected", new)
