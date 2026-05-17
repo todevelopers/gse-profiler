@@ -50,6 +50,17 @@ _MODE_HINTS: dict[str, str] = {
     ),
 }
 
+_FN_HINT = (
+    "Lists every profiled function with aggregated stats across all calls."
+    " Total is the full duration including time spent in nested calls."
+    " Self is time the function spent in its own code only; if it calls other"
+    " functions, their time is not counted. A function with high Total but low"
+    " Self is mostly waiting on its callees. Avg and Max show the average and"
+    " slowest single call duration. The Distribution bar shows two overlapping"
+    " bars: the lighter one for Total, the darker one for Self, both scaled"
+    " relative to the busiest function and color-coded by load."
+)
+
 
 def _settings_path() -> Path:
     return Path(GLib.get_user_config_dir()) / "gse-profiler" / "profiler.json"
@@ -547,6 +558,14 @@ class ProfilerView(Gtk.Stack):
         self._fn_caption = Gtk.Label(xalign=0.0)
         self._fn_caption.add_css_class("prof-section-sub")
         box.append(self._fn_caption)
+
+        fn_info = Gtk.Button()
+        fn_info.set_icon_name("dialog-information-symbolic")
+        fn_info.add_css_class("flat")
+        fn_info.add_css_class("prof-info-btn")
+        fn_info.set_tooltip_text(_FN_HINT)
+        fn_info.set_can_focus(False)
+        box.append(fn_info)
 
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
