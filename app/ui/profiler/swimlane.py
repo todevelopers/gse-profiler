@@ -16,14 +16,12 @@ from gi.repository import Adw, GObject, Gtk
 
 from . import (
     DEPTH_COLORS,
-    GAP_BREAK_PX,
-    GAP_THRESHOLD_S,
     TooltipPopover,
+    compute_timeline_layout,
     desaturate_color,
-    format_gap,
+    draw_gap_break,
     format_ms,
     rounded_rect,
-    visible_segments,
 )
 
 _LABEL_W_MIN = 80
@@ -48,6 +46,7 @@ class SwimlaneView(Gtk.DrawingArea):
         self._events: list[dict[str, Any]] = []
         self._selected_fn: str | None = None
         self._filter_text: str = ""
+        self._show_gaps: bool = True
 
         # Hit-test cache: (x, y, w, h, event)
         self._bar_rects: list[tuple[float, float, float, float, dict[str, Any]]] = []
@@ -87,22 +86,26 @@ class SwimlaneView(Gtk.DrawingArea):
         self._filter_text = new
         self.queue_draw()
 
+    def set_show_gaps(self, show: bool) -> None:
+        if show == self._show_gaps:
+            return
+        self._show_gaps = show
+        self.queue_draw()
+
     # ── Drawing ──────────────────────────────────────────────────────────
 
     def _draw(self, _area: Gtk.DrawingArea, cr: Any, width: int, _height: int) -> None:
         dark = Adw.StyleManager.get_default().get_dark()
         if dark:
-            c_bg       = (0.15, 0.15, 0.15)
-            c_row_alt  = (0.19, 0.19, 0.19)
-            c_text     = (0.88, 0.88, 0.88)
-            c_tick     = (0.55, 0.55, 0.55)
-            c_gap_bg   = (0.10, 0.10, 0.10)
+            c_bg      = (0.15, 0.15, 0.15)
+            c_row_alt = (0.19, 0.19, 0.19)
+            c_text    = (0.88, 0.88, 0.88)
+            c_tick    = (0.55, 0.55, 0.55)
         else:
-            c_bg       = (1.00, 1.00, 1.00)
-            c_row_alt  = (0.95, 0.95, 0.97)
-            c_text     = (0.12, 0.12, 0.12)
-            c_tick     = (0.35, 0.35, 0.35)
-            c_gap_bg   = (0.88, 0.88, 0.90)
+            c_bg      = (1.00, 1.00, 1.00)
+            c_row_alt = (0.95, 0.95, 0.97)
+            c_text    = (0.12, 0.12, 0.12)
+            c_tick    = (0.35, 0.35, 0.35)
 
         self._bar_rects.clear()
 
@@ -115,10 +118,6 @@ class SwimlaneView(Gtk.DrawingArea):
             cr.move_to((width - extents[2]) / 2, 60)
             cr.show_text(text)
             return
-
-        segments = visible_segments(self._events)
-        active_total = sum(e - s for s, e in segments) or 1e-9
-        n_breaks = len(segments) - 1
 
         # Unique function names in order of first appearance.
         seen: dict[str, int] = {}
@@ -134,17 +133,18 @@ class SwimlaneView(Gtk.DrawingArea):
         label_w = int(min(max_name_px, _LABEL_W_MAX)) + 16
 
         chart_w = max(width - label_w - 4, 1)
-        seg_total_px = max(chart_w - n_breaks * GAP_BREAK_PX, 10)
         needed_h = _PAD_TOP + len(seen) * _ROW_H + _PAD_BOT
         self.set_content_height(max(needed_h, 140))
 
-        # Lay out segments in display space: (seg_start, seg_end, x0, w_px).
-        seg_layout: list[tuple[float, float, float, float]] = []
-        x_cursor = float(label_w)
-        for seg_s, seg_e in segments:
-            seg_w_px = (seg_e - seg_s) / active_total * seg_total_px
-            seg_layout.append((seg_s, seg_e, x_cursor, seg_w_px))
-            x_cursor += seg_w_px + GAP_BREAK_PX
+        layout = compute_timeline_layout(
+            self._events,
+            chart_w=float(chart_w),
+            show_gaps=self._show_gaps,
+        )
+        lanes = layout["lanes"]
+        t0 = layout["t0"]
+        active_lanes = [l for l in lanes if l["kind"] == "active"]
+        gap_lanes = [l for l in lanes if l["kind"] == "gap"]
 
         # Background.
         cr.set_source_rgb(*c_bg)
@@ -175,15 +175,7 @@ class SwimlaneView(Gtk.DrawingArea):
             cr.show_text(label)
             self._bar_rects.append((0.0, float(y + 4), float(label_w), float(_ROW_H - 8), fn_first_event[fn]))
 
-        # Shade the collapsed-gap "break" columns.
-        for i in range(n_breaks):
-            _, _, x0_prev, w_prev = seg_layout[i]
-            break_x = x0_prev + w_prev
-            cr.set_source_rgb(*c_gap_bg)
-            cr.rectangle(break_x, _PAD_TOP, GAP_BREAK_PX, needed_h - _PAD_TOP - _PAD_BOT)
-            cr.fill()
-
-        # Event bars — split across every segment they overlap.
+        # Event bars — split across active lanes.
         for e in self._events:
             row = seen[e["function"]]
             by = _PAD_TOP + row * _ROW_H + 4
@@ -191,16 +183,16 @@ class SwimlaneView(Gtk.DrawingArea):
             is_dimmed = self._is_dimmed(e["function"])
             alpha = 0.22 if is_dimmed else 0.85
             bar_h = _ROW_H - 8
-            for seg_s, seg_e, x0, w in seg_layout:
-                if e["end"] <= seg_s or e["start"] >= seg_e:
+            for lane in active_lanes:
+                if e["end"] <= lane["s"] or e["start"] >= lane["e"]:
                     continue
-                seg_dur = seg_e - seg_s
-                if seg_dur <= 0 or w <= 0:
+                seg_dur = lane["e"] - lane["s"]
+                if seg_dur <= 0 or lane["w"] <= 0:
                     continue
-                piece_s = max(e["start"], seg_s)
-                piece_e = min(e["end"], seg_e)
-                bx = x0 + (piece_s - seg_s) / seg_dur * w
-                bw = max((piece_e - piece_s) / seg_dur * w, 2.0)
+                piece_s = max(e["start"], lane["s"])
+                piece_e = min(e["end"], lane["e"])
+                bx = label_w + lane["x"] + (piece_s - lane["s"]) / seg_dur * lane["w"]
+                bw = max((piece_e - piece_s) / seg_dur * lane["w"], 2.0)
                 rounded_rect(cr, bx, by, bw, bar_h)
                 cr.set_source_rgba(r, g, b, alpha)
                 cr.fill_preserve()
@@ -219,37 +211,29 @@ class SwimlaneView(Gtk.DrawingArea):
                     cr.stroke()
                 self._bar_rects.append((bx, by, bw, bar_h, e))
 
-        # Segment-break visuals: two dashed verticals + gap-duration label.
-        cr.set_source_rgb(*c_tick)
-        cr.set_line_width(1.0)
-        for i in range(n_breaks):
-            _, prev_end, x0_prev, w_prev = seg_layout[i]
-            next_start = seg_layout[i + 1][0]
-            break_x = x0_prev + w_prev
-            cr.set_dash([3, 3])
-            for dx in (3, GAP_BREAK_PX - 3):
-                cr.move_to(break_x + dx, _PAD_TOP)
-                cr.line_to(break_x + dx, needed_h - _PAD_BOT)
-                cr.stroke()
-            cr.set_dash([])
-            gap_label = format_gap(next_start - prev_end)
-            cr.set_font_size(9)
-            ext = cr.text_extents(gap_label)
-            cr.move_to(break_x + (GAP_BREAK_PX - ext[2]) / 2, _PAD_TOP - 6)
-            cr.show_text(gap_label)
-            cr.set_font_size(10)
+        # Gap-break columns (drawn on top of bars).
+        for lane in gap_lanes:
+            if lane["w"] <= 0:
+                continue
+            draw_gap_break(
+                cr, label_w + lane["x"], _PAD_TOP,
+                lane["w"], needed_h - _PAD_TOP - _PAD_BOT,
+                lane["e"] - lane["s"], dark,
+            )
 
-        # Time axis: solid baseline per segment + tick marks + dashed guides.
-        t0 = segments[0][0]
-        for seg_s, seg_e, x0, w in seg_layout:
+        # Time axis: solid baseline per active lane + tick marks + dashed guides.
+        cr.select_font_face("monospace", 0, 0)
+        cr.set_font_size(10)
+        for lane in active_lanes:
+            x0 = label_w + lane["x"]
             cr.set_source_rgb(*c_tick)
             cr.set_line_width(0.75)
             cr.set_dash([])
             cr.move_to(x0, _PAD_TOP - 2)
-            cr.line_to(x0 + w, _PAD_TOP - 2)
+            cr.line_to(x0 + lane["w"], _PAD_TOP - 2)
             cr.stroke()
-            for frac, t_real in ((0.0, seg_s), (1.0, seg_e)):
-                x = x0 + frac * w
+            for frac, t_real in ((0.0, lane["s"]), (1.0, lane["e"])):
+                x = x0 + frac * lane["w"]
                 t_ms = (t_real - t0) * 1000.0
                 label = f"{t_ms:.0f}ms"
                 ext = cr.text_extents(label)

@@ -27,9 +27,11 @@ DEPTH_COLORS: list[tuple[float, float, float]] = [
 ]
 
 # Idle periods longer than this collapse into a visual break on the timeline.
-GAP_THRESHOLD_S = 2.0
-# Pixel width of the collapsed-gap break drawn between segments.
-GAP_BREAK_PX = 22
+GAP_THRESHOLD_S = 0.05  # 50 ms — collapse all gaps larger than this
+# Pixel width bounds for the collapsed-gap break column (log-scale).
+GAP_BREAK_PX_MIN = 14
+GAP_BREAK_PX_MAX = 60
+GAP_BREAK_PX_BASE = 20
 
 
 def desaturate_color(
@@ -64,30 +66,36 @@ def rounded_rect(cr: Any, x: float, y: float, w: float, h: float, r: float = 4.0
     cr.close_path()
 
 
-def visible_segments(events: list[dict[str, Any]]) -> list[tuple[float, float]]:
-    """Active-time segments separated by collapsed idle gaps.
+def visible_segments(
+    events: list[dict[str, Any]],
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Active-time segments and the collapsed idle gaps between them.
 
-    Iterates events in start-order, tracking the running max end-time seen so
-    far. A segment closes when the next event's start is more than
-    ``GAP_THRESHOLD_S`` past that max — this correctly handles long-running
-    parents whose end-time follows several shorter children in start-order.
+    Returns ``(active_segments, collapsed_gaps)`` where each element is a list
+    of ``(start, end)`` pairs. Iterates events in start-order, tracking the
+    running max end-time seen so far. A segment closes when the next event's
+    start is more than ``GAP_THRESHOLD_S`` past that max — this correctly
+    handles long-running parents whose end-time follows several shorter
+    children in start-order.
     """
     if not events:
-        return []
+        return [], []
     ordered = sorted(events, key=lambda e: e["start"])
     segments: list[tuple[float, float]] = []
+    gaps: list[tuple[float, float]] = []
     seg_start = ordered[0]["start"]
     running_end = ordered[0]["end"]
     for e in ordered[1:]:
         if e["start"] - running_end > GAP_THRESHOLD_S:
             segments.append((seg_start, running_end))
+            gaps.append((running_end, e["start"]))
             seg_start = e["start"]
             running_end = e["end"]
         else:
             if e["end"] > running_end:
                 running_end = e["end"]
     segments.append((seg_start, running_end))
-    return segments
+    return segments, gaps
 
 
 def format_gap(seconds: float) -> str:
@@ -105,6 +113,164 @@ def format_ms(v: float) -> str:
     if v >= 1.0:
         return f"{v:.2f} ms"
     return f"{v:.3f} ms"
+
+
+def gap_break_px(gap_duration_s: float, show_gaps: bool = True) -> float:
+    """Width of a gap-break column in pixels (log-scale).
+
+    ``show_gaps=False`` returns 0 so segments snap together.
+    ``show_gaps=True`` scales logarithmically between GAP_BREAK_PX_MIN and MAX.
+    """
+    if not show_gaps:
+        return 0.0
+    ms = gap_duration_s * 1000.0
+    w = GAP_BREAK_PX_MIN + math.log10(1.0 + ms / 50.0) * 14.0
+    return max(GAP_BREAK_PX_MIN, min(GAP_BREAK_PX_MAX, w))
+
+
+def compute_timeline_layout(
+    events: list[dict[str, Any]],
+    chart_w: float,
+    show_gaps: bool = True,
+) -> dict[str, Any]:
+    """Compute display-space lane layout for Flamegraph and Swimlane.
+
+    Returns a dict with:
+    ``lanes``           — list of dicts: {kind: 'active'|'gap', s, e, x, w}
+    ``t0``, ``t1``, ``span``
+    ``x_for(t)``        — maps wall-clock time → x-offset within the chart area
+    ``saved_s``         — total seconds collapsed into gap breaks
+    ``collapsed_count`` — number of gaps
+    """
+    if not events:
+        return {
+            "lanes": [], "t0": 0.0, "t1": 0.0, "span": 0.0,
+            "x_for": lambda t: 0.0, "saved_s": 0.0, "collapsed_count": 0,
+        }
+
+    t0 = min(e["start"] for e in events)
+    t1 = max(e["end"] for e in events)
+    span = (t1 - t0) or 1e-9
+    segments, gaps = visible_segments(events)
+    gap_px_list = [gap_break_px(g[1] - g[0], show_gaps) for g in gaps]
+    total_gap_px = sum(gap_px_list)
+    total_active_px = max(chart_w - total_gap_px, 100.0)
+    total_active_s = sum(e - s for s, e in segments) or 1e-9
+
+    lanes: list[dict[str, Any]] = []
+    cursor = 0.0
+    for i, (seg_s, seg_e) in enumerate(segments):
+        seg_w = (seg_e - seg_s) / total_active_s * total_active_px
+        lanes.append({"kind": "active", "s": seg_s, "e": seg_e, "x": cursor, "w": seg_w})
+        cursor += seg_w
+        if i < len(gaps):
+            g_s, g_e = gaps[i]
+            g_w = gap_px_list[i]
+            lanes.append({"kind": "gap", "s": g_s, "e": g_e, "x": cursor, "w": g_w})
+            cursor += g_w
+
+    def x_for(t: float) -> float:
+        for lane in lanes:
+            if lane["s"] <= t <= lane["e"]:
+                if lane["kind"] == "active":
+                    frac = (t - lane["s"]) / max(lane["e"] - lane["s"], 1e-9)
+                    return lane["x"] + frac * lane["w"]
+                return lane["x"] + lane["w"] / 2.0
+        return 0.0 if t < t0 else cursor
+
+    saved_s = sum(g[1] - g[0] for g in gaps)
+    return {
+        "lanes": lanes, "t0": t0, "t1": t1, "span": span,
+        "x_for": x_for, "saved_s": saved_s, "collapsed_count": len(gaps),
+    }
+
+
+def draw_gap_break(
+    cr: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    gap_s: float,
+    dark: bool,
+) -> None:
+    """Draw a gap-break column: hatched background, dashed edges, zigzag, label."""
+    cr.save()
+
+    # Background fill.
+    cr.set_source_rgba(0.5, 0.5, 0.5, 0.06 if dark else 0.04)
+    cr.rectangle(x, y, w, h)
+    cr.fill()
+
+    # Diagonal hatching (clipped to column).
+    cr.save()
+    cr.rectangle(x, y, w, h)
+    cr.clip()
+    stripe_color = (0.9, 0.9, 0.9, 0.14) if dark else (0.1, 0.1, 0.1, 0.12)
+    cr.set_source_rgba(*stripe_color)
+    cr.set_line_width(1.0)
+    spacing = 5.0
+    for offset in range(-int(h), int(w + h), int(spacing)):
+        cr.move_to(x + offset, y)
+        cr.line_to(x + offset + h, y + h)
+    cr.stroke()
+    cr.restore()
+
+    # Dashed vertical edges.
+    cr.set_source_rgba(0.5, 0.5, 0.5, 0.22)
+    cr.set_line_width(1.0)
+    cr.set_dash([3.0, 3.0])
+    for ex in (x + 0.5, x + w - 0.5):
+        cr.move_to(ex, y)
+        cr.line_to(ex, y + h)
+        cr.stroke()
+    cr.set_dash([])
+
+    # Zigzag (torn-axis) in the vertical centre.
+    if w >= 12:
+        mid_y = y + h / 2.0
+        amp = 2.5
+        steps = max(4, int((w - 2) / 4))
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.40)
+        cr.set_line_width(1.2)
+        cr.move_to(x + 1, mid_y)
+        for i in range(1, steps + 1):
+            px = x + 1 + (i / steps) * (w - 2)
+            py = mid_y + (amp if i % 2 == 0 else -amp)
+            cr.line_to(px, py)
+        cr.line_to(x + w - 1, mid_y)
+        cr.stroke()
+
+    # Duration label with pill background (only when the column is wide enough).
+    if w >= 36:
+        dur = gap_s
+        if dur < 1.0:
+            lbl = f"+{dur * 1000:.0f}ms"
+        elif dur < 60.0:
+            lbl = f"+{dur:.2f}s"
+        else:
+            lbl = f"+{dur / 60:.1f}m"
+        cr.set_font_size(9)
+        ext = cr.text_extents(lbl)
+        lx = x + (w - ext[2]) / 2
+        ly = y + h / 2 + 3
+        pad = 4
+        cr.set_source_rgba(
+            0.10 if dark else 0.95,
+            0.10 if dark else 0.95,
+            0.10 if dark else 0.95,
+            0.85,
+        )
+        rounded_rect(cr, lx - pad, ly - 10, ext[2] + pad * 2, 13, r=4.0)
+        cr.fill()
+        if dark:
+            cr.set_source_rgba(0.7, 0.7, 0.7, 0.9)
+        else:
+            cr.set_source_rgba(0.3, 0.3, 0.3, 0.9)
+        cr.move_to(lx, ly)
+        cr.show_text(lbl)
+
+    cr.restore()
 
 
 class TooltipPopover:
@@ -208,10 +374,15 @@ class TooltipPopover:
 __all__ = [
     "DEPTH_COLORS",
     "GAP_THRESHOLD_S",
-    "GAP_BREAK_PX",
+    "GAP_BREAK_PX_MIN",
+    "GAP_BREAK_PX_MAX",
+    "GAP_BREAK_PX_BASE",
     "desaturate_color",
     "rounded_rect",
     "visible_segments",
+    "gap_break_px",
+    "compute_timeline_layout",
+    "draw_gap_break",
     "format_gap",
     "format_ms",
     "TooltipPopover",
