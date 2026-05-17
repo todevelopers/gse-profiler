@@ -292,12 +292,12 @@ class ProfilerView(Gtk.Stack):
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.VERTICAL)
         self._paned.set_vexpand(True)
         self._paned.set_wide_handle(True)
+        self._paned.add_css_class("prof-paned")
 
         tl_panel = self._build_timeline_panel()
         tl_panel.set_vexpand(True)
         tl_panel.set_margin_start(16)
         tl_panel.set_margin_end(16)
-        tl_panel.set_margin_bottom(6)
         self._paned.set_start_child(tl_panel)
         self._paned.set_resize_start_child(True)
         self._paned.set_shrink_start_child(False)
