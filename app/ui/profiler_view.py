@@ -29,6 +29,26 @@ _MODE_LABELS: dict[str, str] = {
     "histogram": "Histogram",
 }
 _DEFAULT_MODE = "swimlane"
+_MODE_HINTS: dict[str, str] = {
+    "flamegraph": (
+        "Shows function calls as a nested stack. Each bar's width reflects how long"
+        " the call took relative to the total span. Bars stacked vertically show the"
+        " call hierarchy: caller at the bottom, callees above. Wider bars are slower."
+        " Click any bar to highlight all calls to that function."
+    ),
+    "swimlane": (
+        "Shows each unique function in its own horizontal lane. Each colored segment"
+        " marks one invocation, its width reflecting duration. Lanes are sorted by"
+        " total time, slowest at top. Useful for spotting call frequency and whether"
+        " invocations overlap in time. Click a segment to select that function."
+    ),
+    "histogram": (
+        "Shows how execution time is distributed across calls. Each bar is a duration"
+        " bucket: taller means more calls fell in that range. A long right tail signals"
+        " occasional slow outliers. Click a bar to filter the functions table to calls"
+        " in that duration range."
+    ),
+}
 
 
 def _settings_path() -> Path:
@@ -424,6 +444,15 @@ class ProfilerView(Gtk.Stack):
         spacer.set_hexpand(True)
         head.append(spacer)
 
+        # Info button — shows a tooltip describing the current graph mode.
+        self._info_btn = Gtk.Button()
+        self._info_btn.set_icon_name("dialog-information-symbolic")
+        self._info_btn.add_css_class("flat")
+        self._info_btn.add_css_class("prof-info-btn")
+        self._info_btn.set_tooltip_text(_MODE_HINTS[self._mode])
+        self._info_btn.set_can_focus(False)
+        head.append(self._info_btn)
+
         # Mode tabs — three ToggleButtons grouped so exactly one is active.
         tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         tabs.add_css_class("prof-tabs")
@@ -480,6 +509,7 @@ class ProfilerView(Gtk.Stack):
             return
         self._mode = mode
         self._tl_stack.set_visible_child_name(mode)
+        self._info_btn.set_tooltip_text(_MODE_HINTS[mode])
         _save_settings({"mode": mode})
         self._update_active_graph()
 
