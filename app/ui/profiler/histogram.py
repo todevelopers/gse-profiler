@@ -234,7 +234,7 @@ class HistogramView(Gtk.DrawingArea):
     def _hit_test(self, x: float, y: float) -> tuple[_StatLike, float] | None:
         for bx, by, bw, bh, s in self._bar_rects:
             row_top = by - 5
-            if row_top <= y <= row_top + _ROW_H and x <= bx + max(bw, 6):
+            if row_top <= y <= by + bh and x <= bx + max(bw, 6):
                 return s, by + bh
         return None
 
