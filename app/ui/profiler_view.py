@@ -43,10 +43,10 @@ _MODE_HINTS: dict[str, str] = {
         " invocations overlap in time. Click a segment to select that function."
     ),
     "histogram": (
-        "Shows how execution time is distributed across calls. Each bar is a duration"
-        " bucket: taller means more calls fell in that range. A long right tail signals"
-        " occasional slow outliers. Click a bar to filter the functions table to calls"
-        " in that duration range."
+        "Ranks the top functions by self time — time spent inside the function itself,"
+        " excluding callees. Each bar's width is the total self time summed across all"
+        " calls. Functions with the widest bars are your bottlenecks. Bars in red"
+        " exceed 70 % of the chart maximum. Click a bar to select that function."
     ),
 }
 
