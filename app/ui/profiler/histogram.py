@@ -151,7 +151,7 @@ class HistogramView(Gtk.DrawingArea):
         for i in range(ticks + 1):
             v = (i / ticks) * max_self
             x = label_col_w + (v / max_self) * chart_w
-            label = f"{v:.1f} ms"
+            label = f"{v:.0f} ms"
             cr.set_source_rgb(*c_tick)
             cr.set_line_width(0.75)
             cr.set_dash([])

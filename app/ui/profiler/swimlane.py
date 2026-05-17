@@ -251,7 +251,7 @@ class SwimlaneView(Gtk.DrawingArea):
             for frac, t_real in ((0.0, seg_s), (1.0, seg_e)):
                 x = x0 + frac * w
                 t_ms = (t_real - t0) * 1000.0
-                label = f"{t_ms:.1f}ms"
+                label = f"{t_ms:.0f}ms"
                 ext = cr.text_extents(label)
                 lx = x + 2 if frac == 0.0 else x - ext[2] - 2
                 cr.set_source_rgb(*c_tick)
