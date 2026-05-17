@@ -13,7 +13,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, GObject, Gtk
 
-from . import DEPTH_COLORS, TooltipPopover, format_ms
+from . import DEPTH_COLORS, TooltipPopover, desaturate_color, format_ms
 
 _PAD_LEFT = 8
 _PAD_RIGHT = 8
@@ -158,6 +158,8 @@ class FlamegraphView(Gtk.DrawingArea):
             h = _ROW_H - 6
 
             r, g, b = DEPTH_COLORS[depth % len(DEPTH_COLORS)]
+            if dark:
+                r, g, b = desaturate_color(r, g, b)
             alpha = 0.25 if self._is_dimmed(e["function"]) else 0.92
             cr.set_source_rgba(r, g, b, alpha)
             cr.rectangle(x, y, w, h)

@@ -31,6 +31,22 @@ GAP_THRESHOLD_S = 2.0
 GAP_BREAK_PX = 22
 
 
+def desaturate_color(
+    r: float, g: float, b: float, amount: float = 0.28
+) -> tuple[float, float, float]:
+    """Mix an RGB color toward its perceived gray by *amount* (0–1).
+
+    Preserves hue while reducing chroma so saturated palette colors don't
+    appear over-vivid against dark backgrounds.
+    """
+    gray = 0.299 * r + 0.587 * g + 0.114 * b
+    return (
+        r + (gray - r) * amount,
+        g + (gray - g) * amount,
+        b + (gray - b) * amount,
+    )
+
+
 def visible_segments(events: list[dict[str, Any]]) -> list[tuple[float, float]]:
     """Active-time segments separated by collapsed idle gaps.
 
@@ -147,6 +163,7 @@ __all__ = [
     "DEPTH_COLORS",
     "GAP_THRESHOLD_S",
     "GAP_BREAK_PX",
+    "desaturate_color",
     "visible_segments",
     "format_gap",
     "format_ms",

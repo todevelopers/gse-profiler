@@ -13,7 +13,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, GObject, Gtk
 
-from . import TooltipPopover, format_ms
+from . import TooltipPopover, desaturate_color, format_ms
 
 _PAD_LEFT = 170
 _PAD_RIGHT = 100
@@ -94,8 +94,8 @@ class HistogramView(Gtk.DrawingArea):
             c_row_alt  = (0.16, 0.16, 0.20)
             c_text     = (0.88, 0.88, 0.88)
             c_tick     = (0.55, 0.55, 0.55)
-            c_bar      = (0.21, 0.52, 0.89)  # accent blue
-            c_hot      = (0.90, 0.18, 0.20)  # error red
+            c_bar      = desaturate_color(0.21, 0.52, 0.89)  # accent blue, muted for dark bg
+            c_hot      = desaturate_color(0.90, 0.18, 0.20)  # error red, muted for dark bg
         else:
             c_bg       = (1.00, 1.00, 1.00)
             c_row_alt  = (0.96, 0.96, 0.98)
