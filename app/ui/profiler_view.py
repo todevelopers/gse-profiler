@@ -166,12 +166,18 @@ class ProfilerView(Gtk.Stack):
         placeholder.set_icon_name("power-profile-performance-symbolic")
         placeholder.set_title("No Extension Selected")
         placeholder.set_description("Select an enabled extension from the list to start profiling.")
+        placeholder.set_child(self._build_placeholder_actions(
+            "Select an enabled extension to start"
+        ))
         self.add_named(placeholder, "placeholder")
 
         disabled = Adw.StatusPage()
         disabled.set_icon_name("power-profile-performance-symbolic")
         disabled.set_title("Extension Disabled")
         disabled.set_description("Enable the extension to start profiling.")
+        disabled.set_child(self._build_placeholder_actions(
+            "Enable the extension to start"
+        ))
         self.add_named(disabled, "disabled")
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -270,6 +276,32 @@ class ProfilerView(Gtk.Stack):
             self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
 
     # ── Empty state (inside content) ──────────────────────────────────────
+
+    def _build_placeholder_actions(self, start_tooltip: str) -> Gtk.Widget:
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        actions.set_halign(Gtk.Align.CENTER)
+
+        start_btn = Gtk.Button()
+        start_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        start_box.append(Gtk.Image.new_from_icon_name("media-playback-start-symbolic"))
+        start_box.append(Gtk.Label(label="Start"))
+        start_btn.set_child(start_box)
+        start_btn.add_css_class("suggested-action")
+        start_btn.add_css_class("pill")
+        start_btn.set_sensitive(False)
+        start_btn.set_tooltip_text(start_tooltip)
+        actions.append(start_btn)
+
+        open_btn = Gtk.Button()
+        open_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        open_box.append(Gtk.Image.new_from_icon_name("document-open-symbolic"))
+        open_box.append(Gtk.Label(label="Open File…"))
+        open_btn.set_child(open_box)
+        open_btn.add_css_class("pill")
+        open_btn.connect("clicked", self._on_load)
+        actions.append(open_btn)
+
+        return actions
 
     def _build_empty_state(self) -> Gtk.Widget:
         page = Adw.StatusPage()
