@@ -173,7 +173,7 @@ def compute_timeline_layout(
         for lane in lanes:
             if lane["s"] <= t <= lane["e"]:
                 if lane["kind"] == "active":
-                    frac = (t - lane["s"]) / max(lane["e"] - lane["s"], 1e-9)
+                    frac = float(t - lane["s"]) / max(float(lane["e"] - lane["s"]), 1e-9)
                     return float(lane["x"]) + frac * float(lane["w"])
                 return float(lane["x"]) + float(lane["w"]) / 2.0
         return 0.0 if t < t0 else cursor
