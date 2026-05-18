@@ -129,8 +129,8 @@ class FlamegraphView(Gtk.DrawingArea):
             show_gaps=self._show_gaps,
         )
         t0 = layout["t0"]
-        active_lanes = [l for l in layout["lanes"] if l["kind"] == "active"]
-        gap_lanes = [l for l in layout["lanes"] if l["kind"] == "gap"]
+        active_lanes = [lane for lane in layout["lanes"] if lane["kind"] == "active"]
+        gap_lanes = [lane for lane in layout["lanes"] if lane["kind"] == "gap"]
 
         # Background.
         cr.set_source_rgb(*c_bg)
