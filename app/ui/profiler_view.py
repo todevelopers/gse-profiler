@@ -672,6 +672,7 @@ class ProfilerView(Gtk.Stack):
         scroll = Gtk.ScrolledWindow()
         scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scroll.set_vexpand(True)
+        scroll.set_size_request(0, -1)
         scroll.set_child(col_view)
         return scroll
 

@@ -342,6 +342,7 @@ class LogViewerView(Gtk.Box):
         self._scroll = Gtk.ScrolledWindow()
         self._scroll.set_vexpand(True)
         self._scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self._scroll.set_size_request(0, -1)
         self._scroll.set_child(col_view)
 
         # ── Empty-state stack (wraps the list) ─────────────────────────────

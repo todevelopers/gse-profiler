@@ -160,6 +160,7 @@ class InspectorView(Gtk.Stack):
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_vexpand(True)
+        scrolled.set_size_request(0, -1)
         scrolled.set_child(col_view)
 
         # ── Placeholder ─────────────────────────────────────────────────────
