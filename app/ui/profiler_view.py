@@ -482,6 +482,15 @@ class ProfilerView(Gtk.Stack):
         head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         head.add_css_class("prof-tl-head")
 
+        # Hide-idle toggle — icon-only, placed before the title.
+        self._show_gaps_btn = Gtk.ToggleButton()
+        self._show_gaps_btn.set_icon_name("edit-select-symbolic")
+        self._show_gaps_btn.add_css_class("flat")
+        self._show_gaps_btn.set_active(False)  # default: gaps visible
+        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
+        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
+        head.append(self._show_gaps_btn)
+
         title = Gtk.Label(label="Timeline")
         title.set_xalign(0.0)
         title.add_css_class("prof-tl-title")
@@ -500,14 +509,6 @@ class ProfilerView(Gtk.Stack):
         self._info_icon.add_css_class("prof-info-btn")
         self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
         head.append(self._info_icon)
-
-        # Hide-idle toggle — collapses idle gaps on the timeline.
-        self._show_gaps_btn = Gtk.ToggleButton(label="Hide idle")
-        self._show_gaps_btn.add_css_class("flat")
-        self._show_gaps_btn.set_active(False)  # default: gaps visible
-        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
-        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
-        head.append(self._show_gaps_btn)
 
         # Mode tabs — three ToggleButtons grouped so exactly one is active.
         tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
@@ -573,7 +574,6 @@ class ProfilerView(Gtk.Stack):
         show = not btn.get_active()  # active=True means gaps are hidden
         self._flamegraph.set_show_gaps(show)
         self._swimlane.set_show_gaps(show)
-        btn.set_label("Show idle" if not show else "Hide idle")
 
     # ── Paned position persistence ────────────────────────────────────────
 
