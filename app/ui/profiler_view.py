@@ -204,7 +204,7 @@ class ProfilerView(Gtk.Stack):
         # The spacer that follows absorbs the width change, so the
         # right-anchored action group never shifts when recording toggles.
         self._rec_revealer = Gtk.Revealer()
-        self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.CROSSFADE)
+        self._rec_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_RIGHT)
         self._rec_revealer.set_transition_duration(180)
         self._rec_revealer.set_reveal_child(False)
         self._rec_revealer.set_valign(Gtk.Align.CENTER)
@@ -229,7 +229,7 @@ class ProfilerView(Gtk.Stack):
         self._file_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self._file_label.set_max_width_chars(40)
         self._file_label.set_valign(Gtk.Align.CENTER)
-        self._file_label.set_margin_start(8)
+        self._file_label.set_margin_start(2)
         toolbar.append(self._file_label)
 
         spacer = Gtk.Box()
