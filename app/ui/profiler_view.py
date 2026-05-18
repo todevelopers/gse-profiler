@@ -998,6 +998,7 @@ class ProfilerView(Gtk.Stack):
         self._clear_data()
         for event in data.get("events", []):
             self._ingest_event(event, schedule_refresh=False)
+        self.set_visible_child_name("content")
         self._flush_refresh()
 
     def _on_clear(self, _btn: Gtk.Button) -> None:
