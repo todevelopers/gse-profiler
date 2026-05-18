@@ -441,6 +441,7 @@ class ProfilerView(Gtk.Stack):
         self._card_max_value, self._card_max_sub = v4, d4
         cards.append(c4)
 
+        cards.set_size_request(0, -1)
         # Initialise to "no data" placeholders.
         self._update_stat_cards()
         return cards
@@ -519,6 +520,7 @@ class ProfilerView(Gtk.Stack):
         for m in _MODES:
             btn = Gtk.ToggleButton(label=_MODE_LABELS[m])
             btn.add_css_class("prof-tab")
+            btn.set_size_request(0, -1)
             if group_anchor is None:
                 group_anchor = btn
             else:
@@ -528,6 +530,7 @@ class ProfilerView(Gtk.Stack):
             btn.connect("toggled", self._on_mode_toggled, m)
             self._mode_btns[m] = btn
             tabs.append(btn)
+        tabs.set_size_request(0, -1)
         head.append(tabs)
 
         outer.append(head)
