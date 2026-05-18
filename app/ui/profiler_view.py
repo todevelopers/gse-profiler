@@ -251,7 +251,7 @@ class ProfilerView(Gtk.Stack):
         toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
         self._start_stop_btn = Gtk.Button()
-        self._start_stop_btn.set_tooltip_text("Start profiling selected extension")
+        self._start_stop_btn.set_sensitive(False)
         self._start_stop_btn.connect("clicked", self._on_start_stop)
         self._set_start_stop_state(running=False)
         toolbar.append(self._start_stop_btn)
@@ -999,6 +999,11 @@ class ProfilerView(Gtk.Stack):
         for event in data.get("events", []):
             self._ingest_event(event, schedule_refresh=False)
         self.set_visible_child_name("content")
+        uuid = self._target_uuid
+        self._start_stop_btn.set_sensitive(
+            uuid is not None
+            and self._dbus.get_extension_state(uuid) == ExtensionState.ENABLED
+        )
         self._flush_refresh()
 
     def _on_clear(self, _btn: Gtk.Button) -> None:
