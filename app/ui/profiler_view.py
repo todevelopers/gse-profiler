@@ -603,7 +603,7 @@ class ProfilerView(Gtk.Stack):
     def _do_save_paned_pos(self) -> bool:
         _save_settings({"paned_pos": self._paned.get_position()})
         self._paned_save_id = 0
-        return GLib.SOURCE_REMOVE
+        return bool(GLib.SOURCE_REMOVE)
 
     # ── Functions section header (filter search) ─────────────────────────
 

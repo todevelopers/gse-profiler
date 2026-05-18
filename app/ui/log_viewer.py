@@ -670,12 +670,12 @@ class LogViewerView(Gtk.Box):
             return json.dumps(rows, indent=2)
         lines = []
         for i in range(n):
-            item: LogRowItem = self._store.get_item(i)
+            row: LogRowItem = self._store.get_item(i)
             lines.append(
-                f"{item.entry.timestamp.strftime('%H:%M:%S.%f')[:-3]} "
-                f"[{item.entry.priority_name:<7}] "
-                f"[{item.tag}] "
-                f"{item.body}"
+                f"{row.entry.timestamp.strftime('%H:%M:%S.%f')[:-3]} "
+                f"[{row.entry.priority_name:<7}] "
+                f"[{row.tag}] "
+                f"{row.body}"
             )
         return "\n".join(lines) + ("\n" if lines else "")
 

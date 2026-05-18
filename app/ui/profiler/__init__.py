@@ -174,8 +174,8 @@ def compute_timeline_layout(
             if lane["s"] <= t <= lane["e"]:
                 if lane["kind"] == "active":
                     frac = (t - lane["s"]) / max(lane["e"] - lane["s"], 1e-9)
-                    return lane["x"] + frac * lane["w"]
-                return lane["x"] + lane["w"] / 2.0
+                    return float(lane["x"]) + frac * float(lane["w"])
+                return float(lane["x"]) + float(lane["w"]) / 2.0
         return 0.0 if t < t0 else cursor
 
     saved_s = sum(g[1] - g[0] for g in gaps)
