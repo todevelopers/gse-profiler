@@ -146,6 +146,7 @@ class ProfilerView(Gtk.Stack):
         settings = _load_settings()
         mode = settings.get("mode", _DEFAULT_MODE)
         self._mode: str = mode if mode in _MODES else _DEFAULT_MODE
+        self._hide_idle: bool = bool(settings.get("hide_idle", False))
         raw_pos = settings.get("paned_pos")
         self._paned_pos: int | None = int(raw_pos) if raw_pos is not None else None
         self._paned_save_id: int = 0
@@ -482,15 +483,6 @@ class ProfilerView(Gtk.Stack):
         head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         head.add_css_class("prof-tl-head")
 
-        # Hide-idle toggle — icon-only, placed before the title.
-        self._show_gaps_btn = Gtk.ToggleButton()
-        self._show_gaps_btn.set_icon_name("edit-select-symbolic")
-        self._show_gaps_btn.add_css_class("flat")
-        self._show_gaps_btn.set_active(False)  # default: gaps visible
-        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
-        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
-        head.append(self._show_gaps_btn)
-
         title = Gtk.Label(label="Timeline")
         title.set_xalign(0.0)
         title.add_css_class("prof-tl-title")
@@ -503,12 +495,6 @@ class ProfilerView(Gtk.Stack):
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         head.append(spacer)
-
-        # Info icon — shows a tooltip describing the current graph mode.
-        self._info_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
-        self._info_icon.add_css_class("prof-info-btn")
-        self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
-        head.append(self._info_icon)
 
         # Mode tabs — three ToggleButtons grouped so exactly one is active.
         tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
@@ -529,6 +515,21 @@ class ProfilerView(Gtk.Stack):
             tabs.append(btn)
         head.append(tabs)
 
+        # Hide-idle toggle — icon-only, between tabs and info icon.
+        self._show_gaps_btn = Gtk.ToggleButton()
+        self._show_gaps_btn.set_icon_name("edit-select-symbolic")
+        self._show_gaps_btn.add_css_class("flat")
+        self._show_gaps_btn.set_active(self._hide_idle)
+        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
+        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
+        head.append(self._show_gaps_btn)
+
+        # Info icon — shows a tooltip describing the current graph mode.
+        self._info_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        self._info_icon.add_css_class("prof-info-btn")
+        self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
+        head.append(self._info_icon)
+
         outer.append(head)
 
         # Stack of three views, each in its own scrolled window.
@@ -543,6 +544,10 @@ class ProfilerView(Gtk.Stack):
         self._swimlane.connect("function-selected", self._on_graph_selected)
         self._histogram = HistogramView()
         self._histogram.connect("function-selected", self._on_graph_selected)
+
+        show_gaps = not self._hide_idle
+        self._flamegraph.set_show_gaps(show_gaps)
+        self._swimlane.set_show_gaps(show_gaps)
 
         for name, widget in (
             ("flamegraph", self._flamegraph),
@@ -574,6 +579,7 @@ class ProfilerView(Gtk.Stack):
         show = not btn.get_active()  # active=True means gaps are hidden
         self._flamegraph.set_show_gaps(show)
         self._swimlane.set_show_gaps(show)
+        _save_settings({"hide_idle": btn.get_active()})
 
     # ── Paned position persistence ────────────────────────────────────────
 
