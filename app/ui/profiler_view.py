@@ -224,6 +224,14 @@ class ProfilerView(Gtk.Stack):
         self._rec_revealer.set_child(rec_box)
         toolbar.append(self._rec_revealer)
 
+        self._file_label = Gtk.Label()
+        self._file_label.add_css_class("dim-label")
+        self._file_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        self._file_label.set_max_width_chars(40)
+        self._file_label.set_valign(Gtk.Align.CENTER)
+        self._file_label.set_margin_start(8)
+        toolbar.append(self._file_label)
+
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
         toolbar.append(spacer)
@@ -998,6 +1006,8 @@ class ProfilerView(Gtk.Stack):
         self._clear_data()
         for event in data.get("events", []):
             self._ingest_event(event, schedule_refresh=False)
+        self._file_label.set_text(gfile.get_basename() or "")
+        self._file_label.set_tooltip_text(gfile.get_path() or "")
         self.set_visible_child_name("content")
         uuid = self._target_uuid
         self._start_stop_btn.set_sensitive(
@@ -1008,6 +1018,8 @@ class ProfilerView(Gtk.Stack):
 
     def _on_clear(self, _btn: Gtk.Button) -> None:
         self._clear_data()
+        self._file_label.set_text("")
+        self._file_label.set_tooltip_text("")
         self._flush_refresh()
 
     # ── Filter / selection wiring ─────────────────────────────────────────
