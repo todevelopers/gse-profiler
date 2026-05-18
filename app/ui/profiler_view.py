@@ -496,6 +496,21 @@ class ProfilerView(Gtk.Stack):
         spacer.set_hexpand(True)
         head.append(spacer)
 
+        # Info icon — shows a tooltip describing the current graph mode.
+        self._info_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
+        self._info_icon.add_css_class("prof-info-btn")
+        self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
+        head.append(self._info_icon)
+
+        # Hide-idle toggle — icon-only, between info icon and mode tabs.
+        self._show_gaps_btn = Gtk.ToggleButton()
+        self._show_gaps_btn.set_icon_name("edit-select-symbolic")
+        self._show_gaps_btn.add_css_class("flat")
+        self._show_gaps_btn.set_active(self._hide_idle)
+        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
+        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
+        head.append(self._show_gaps_btn)
+
         # Mode tabs — three ToggleButtons grouped so exactly one is active.
         tabs = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
         tabs.add_css_class("prof-tabs")
@@ -514,21 +529,6 @@ class ProfilerView(Gtk.Stack):
             self._mode_btns[m] = btn
             tabs.append(btn)
         head.append(tabs)
-
-        # Hide-idle toggle — icon-only, between tabs and info icon.
-        self._show_gaps_btn = Gtk.ToggleButton()
-        self._show_gaps_btn.set_icon_name("edit-select-symbolic")
-        self._show_gaps_btn.add_css_class("flat")
-        self._show_gaps_btn.set_active(self._hide_idle)
-        self._show_gaps_btn.set_tooltip_text("Collapse idle gaps on the timeline")
-        self._show_gaps_btn.connect("toggled", self._on_show_gaps_toggled)
-        head.append(self._show_gaps_btn)
-
-        # Info icon — shows a tooltip describing the current graph mode.
-        self._info_icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
-        self._info_icon.add_css_class("prof-info-btn")
-        self._info_icon.set_tooltip_text(_MODE_HINTS[self._mode])
-        head.append(self._info_icon)
 
         outer.append(head)
 
