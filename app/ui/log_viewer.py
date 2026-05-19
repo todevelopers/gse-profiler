@@ -15,6 +15,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
 
+from collections import deque
+
 from app.core.dbus_client import DBusClient
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args
 
@@ -93,15 +95,18 @@ def _load_settings() -> dict[str, object]:
     if p.exists():
         try:
             return cast(dict[str, object], json.loads(p.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("Failed to load settings from %s: %s", p, exc)
     return {}
 
 
 def _save_settings(data: dict) -> None:
     p = _settings_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except OSError as exc:
+        _log.error("Failed to save settings to %s: %s", p, exc)
 
 
 class LogRowItem(GObject.Object):
@@ -126,7 +131,7 @@ class LogViewerView(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self._dbus = dbus_client
         self._reader = JournalReader()
-        self._entries: list[LogEntry] = []
+        self._entries: deque[LogEntry] = deque(maxlen=MAX_ENTRIES)
 
         # Filter state
         self._uuid_filter: str | None = None
@@ -693,8 +698,8 @@ class LogViewerView(Gtk.Box):
     # ── Journal entry handling ─────────────────────────────────────────────
 
     def _on_log_entry(self, _reader: JournalReader, entry: LogEntry) -> None:
-        if len(self._entries) >= MAX_ENTRIES:
-            evicted = self._entries.pop(0)
+        if len(self._entries) == MAX_ENTRIES:
+            evicted = self._entries[0]
             self._bucket_counts[_priority_bucket(evicted.priority)] -= 1
 
         self._entries.append(entry)

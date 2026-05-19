@@ -1,6 +1,8 @@
 import json
 import logging
+from collections import deque
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -62,6 +64,9 @@ _FN_HINT = (
 )
 
 
+_MAX_RAW_EVENTS = 50_000
+
+
 def _settings_path() -> Path:
     return Path(GLib.get_user_config_dir()) / "gse-profiler" / "profiler.json"
 
@@ -71,8 +76,8 @@ def _load_settings() -> dict[str, Any]:
     if p.exists():
         try:
             return cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("Failed to load settings from %s: %s", p, exc)
     return {}
 
 
@@ -82,11 +87,14 @@ def _save_settings(data: dict[str, Any]) -> None:
     if p.exists():
         try:
             existing = cast(dict[str, Any], json.loads(p.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.warning("Failed to load settings from %s: %s", p, exc)
     existing.update(data)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    try:
+        p.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+    except OSError as exc:
+        _log.error("Failed to save settings to %s: %s", p, exc)
 
 
 def _fmt_ms(v: float) -> str:
@@ -134,7 +142,7 @@ class ProfilerView(Gtk.Stack):
 
         # Data
         self._stats: dict[str, FunctionStat] = {}
-        self._raw_events: list[dict[str, Any]] = []
+        self._raw_events: deque[dict[str, Any]] = deque(maxlen=_MAX_RAW_EVENTS)
         self._selected_fn: str | None = None
         self._filter_text: str = ""
         self._max_total_ms: float = 1.0
@@ -156,10 +164,18 @@ class ProfilerView(Gtk.Stack):
 
         self._build_ui()
 
-        socket_server.connect("message-received", self._on_message)
-        socket_server.connect("client-connected", self._on_client_connected)
-        socket_server.connect("client-disconnected", self._on_client_disconnected)
-        dbus_client.connect("extensions-changed", self._on_extensions_changed)
+        self._signal_ids: list[tuple[GObject.Object, int]] = [
+            (socket_server, socket_server.connect("message-received", self._on_message)),
+            (socket_server, socket_server.connect("client-connected", self._on_client_connected)),
+            (socket_server, socket_server.connect("client-disconnected", self._on_client_disconnected)),
+            (dbus_client, dbus_client.connect("extensions-changed", self._on_extensions_changed)),
+        ]
+        self.connect("destroy", self._on_destroy)
+
+    def _on_destroy(self, _widget: Gtk.Widget) -> None:
+        for obj, sig_id in self._signal_ids:
+            obj.disconnect(sig_id)
+        self._signal_ids.clear()
 
     # ── UI construction ────────────────────────────────────────────────────
 
@@ -970,8 +986,6 @@ class ProfilerView(Gtk.Stack):
             self._rec_revealer.set_reveal_child(False)
 
     def _on_save(self, _btn: Gtk.Button) -> None:
-        from datetime import datetime
-
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         if self._target_uuid:
             short = self._target_uuid.split("@")[0]
@@ -992,7 +1006,7 @@ class ProfilerView(Gtk.Stack):
         except GLib.Error:
             return
         payload = {
-            "events": self._raw_events,
+            "events": list(self._raw_events),
             "stats": {
                 name: {
                     "count": s.count,
@@ -1196,8 +1210,9 @@ class ProfilerView(Gtk.Stack):
 
     def _update_active_graph(self) -> None:
         # Push events to all three so a quick tab-switch is instant.
-        self._flamegraph.set_events(self._raw_events)
-        self._swimlane.set_events(self._raw_events)
+        events = list(self._raw_events)
+        self._flamegraph.set_events(events)
+        self._swimlane.set_events(events)
         self._histogram.set_stats(list(self._stats.values()))
 
     def _update_timeline_caption(self) -> None:

@@ -76,6 +76,10 @@ class _ExtRow(Gtk.ListBoxRow):
         self.set_child(box)
         self.update(info)
 
+    @property
+    def display_name(self) -> str:
+        return self._name_label.get_label() or self.uuid
+
     def update(self, info: dict[str, Any]) -> None:
         name = info.get("name") or self.uuid
         state = info.get("state", ExtensionState.DISABLED)
@@ -306,7 +310,7 @@ class ExtensionListView(Gtk.Box):
         text = self._search_text
         for uuid, row in self._rows.items():
             if text:
-                name = (row._name_label.get_label() or "").lower()
+                name = row.display_name.lower()
                 row.set_visible(text in name or text in uuid.lower())
             else:
                 row.set_visible(True)

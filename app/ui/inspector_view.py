@@ -69,12 +69,21 @@ class InspectorView(Gtk.Stack):
         self._expand_handlers: dict[int, int] = {}
         self._drill_handlers: dict[int, int] = {}
 
+        self._item_positions: dict[int, int] = {}
         self._build_ui()
 
-        socket_server.connect("message-received", self._on_message)
-        socket_server.connect("client-connected", self._on_client_connected)
-        socket_server.connect("client-disconnected", self._on_disconnected)
-        dbus_client.connect("extensions-changed", self._on_extensions_changed)
+        self._signal_ids: list[tuple[GObject.Object, int]] = [
+            (socket_server, socket_server.connect("message-received", self._on_message)),
+            (socket_server, socket_server.connect("client-connected", self._on_client_connected)),
+            (socket_server, socket_server.connect("client-disconnected", self._on_disconnected)),
+            (dbus_client, dbus_client.connect("extensions-changed", self._on_extensions_changed)),
+        ]
+        self.connect("destroy", self._on_destroy)
+
+    def _on_destroy(self, _widget: Gtk.Widget) -> None:
+        for obj, sig_id in self._signal_ids:
+            obj.disconnect(sig_id)
+        self._signal_ids.clear()
 
     # ── UI construction ────────────────────────────────────────────────────
 
@@ -360,6 +369,7 @@ class InspectorView(Gtk.Stack):
         ]
         if children:
             self._store.splice(parent_pos + 1, 0, children)
+            self._rebuild_item_positions()
 
     def _remove_children(self, parent: PropertyItem) -> None:
         parent_pos = self._find_item_pos(parent)
@@ -375,13 +385,14 @@ class InspectorView(Gtk.Stack):
                 break
         if count > 0:
             self._store.splice(parent_pos + 1, count, [])
+            self._rebuild_item_positions()
+
+    def _rebuild_item_positions(self) -> None:
+        n = self._store.get_n_items()
+        self._item_positions = {id(self._store.get_item(i)): i for i in range(n)}
 
     def _find_item_pos(self, target: PropertyItem) -> int | None:
-        n = self._store.get_n_items()
-        for i in range(n):
-            if self._store.get_item(i) is target:
-                return i
-        return None
+        return self._item_positions.get(id(target))
 
     # ── Drill-in / breadcrumb navigation ──────────────────────────────────
 
@@ -447,6 +458,7 @@ class InspectorView(Gtk.Stack):
             self._current_path = []
             self._update_breadcrumb()
             self._store.splice(0, self._store.get_n_items(), [])
+            self._item_positions.clear()
             self._stack.set_visible_child_name("placeholder")
             self._status_lbl.set_label("")
         self._update_visible_child(force=changed)
@@ -533,6 +545,7 @@ class InspectorView(Gtk.Stack):
             items.append(pi)
 
         self._store.splice(0, self._store.get_n_items(), items)
+        self._rebuild_item_positions()
 
         count = len(items)
         word = "property" if count == 1 else "properties"
