@@ -329,6 +329,7 @@ class Application(Adw.Application):
             version="0.1.0",
             website="https://github.com/todevelopers/gse-profiler",
             issue_url="https://github.com/todevelopers/gse-profiler/issues",
+            support_url="https://github.com/todevelopers/gse-profiler/discussions",
             license_type=Gtk.License.GPL_3_0,
             developer_name="Tomáš Gažovič",
             developers=["Tomáš Gažovič"],
