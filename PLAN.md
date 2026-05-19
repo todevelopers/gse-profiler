@@ -272,19 +272,24 @@ nested object paths and `Gio.Settings`, so it belongs in V2.
 ### Bridge side
 
 - [ ] `setProperty(uuid, path, name, value)` — walk `stateObj` down `path`,
+  
       then assign to `target[name]`. Honour both data descriptors with `writable: true`
       and accessor descriptors with a setter.
 - [ ] Detect `Gio.Settings` instances during serialization; expose their keys as
+  
       writable children with their declared schema type (`b`, `i`, `d`, `s`, enums).
 - [ ] Re-introduce a `writable` flag in `inspect_result` for each property — only
+  
       `true` when the property is actually assignable on the current `holder`
       (own data prop, accessor with setter, or known GSettings key).
 - [ ] Validate `set_property` values against the property's reported type before
+  
       assigning; reject with a typed error instead of throwing.
 
 ### App side
 
 - [ ] Render a "writable" affordance on rows that can be edited (e.g. an edit
+  
       pencil icon that appears on hover, mirroring the drill-in chevron).
 - [ ] Adwaita `AlertDialog` for edit, with a control matched to the type:
   - String → `Gtk.Entry`
@@ -293,9 +298,11 @@ nested object paths and `Gio.Settings`, so it belongs in V2.
   - Enum (GSettings choice key) → `Gtk.DropDown` populated with allowed values
 - [ ] Send `set_property` with the current navigation `path` and the row `name`.
 - [ ] On `set_property_result.ok` → re-issue `inspect` at the current path and
+  
       flash the affected row briefly to confirm the write.
 - [ ] On `set_property_result.error` → `Adw.Toast` with the bridge's error message.
 - [ ] Drop stale `set_property_result`s where `extensionUuid` / `path` no longer
+  
       match the active navigation (same pattern as stale `inspect_result`s).
 
 ### Protocol additions
@@ -307,6 +314,54 @@ nested object paths and `Gio.Settings`, so it belongs in V2.
 
 `inspect_result.properties[*].writable` returns as a boolean — absent or `false`
 means read-only for V1 clients.
+
+---
+
+## Phase 12: Startup Profiling — disabled → enabled (V2+)
+
+**Goal:** Capture function calls during an extension's `enable()` startup, not just during steady-state runtime.
+
+### Why it's non-trivial
+
+Disabled extensions have no `stateObj` — it's created inside GNOME Shell's internal
+`_callExtensionEnable()` immediately before `enable()` is called. There is no public
+signal between "stateObj assigned" and "enable() invoked", so monkey-patching must
+happen via one of two strategies:
+
+**Variant A — post-enable patching (simpler, ~80 lines)**
+Bridge connects to `extensionManager`'s `extension-state-changed` signal, patches
+`stateObj` the moment state transitions to ENABLED. Misses `enable()` itself but
+catches every callback, timer, and D-Bus reply fired after enable completes —
+sufficient for most startup bottleneck analysis.
+
+**Variant B — full enable() capture (~130 lines, riskier)**
+Bridge monkey-patches `extensionManager.enableExtension()` (public) or the private
+`_callExtensionEnable` async method to intercept before `enable()` is called.
+Catches `enable()` itself, but depends on GNOME Shell internals and may need
+adjustment across major GNOME versions.
+
+### Planned scope (Variant A)
+
+**Bridge side**
+- [ ] New message handler `enable_and_profile { uuid }` in `extension.js`
+- [ ] `Profiler.armForEnable(uuid)` — connects to `extensionManager`'s
+      `extension-state-changed`, patches `stateObj` on first ENABLED transition,
+      then disconnects the signal handler
+- [ ] Teardown: if enable fails or takes > 10 s, disarm and emit `profiling_error`
+
+**App side**
+- [ ] "Profile startup" button on the "Extension Disabled" status page in `profiler_view.py`
+- [ ] On click: send `enable_and_profile`, then call `dbus_client.enable_extension(uuid)`
+- [ ] Handle `profiling_started { ok: false }` — show toast "Extension failed to enable"
+- [ ] Edge cases: bridge disconnects during enable, user clicks twice, extension stays disabled
+
+### Protocol additions
+
+```
+→ { type: "enable_and_profile", uuid }
+← { type: "profiling_started",  uuid, ok }   (reuses existing message)
+← { type: "profiling_error",    uuid, reason } (new)
+```
 
 ---
 
@@ -325,48 +380,21 @@ means read-only for V1 clients.
 
 ## Milestone Summary
 
-| Phase         | Milestone             | Scope                         | Status       |
-| ------------- | --------------------- | ----------------------------- | ------------ |
-| 0             | Skeleton + CI         | Project setup                 | ✅ done      |
-| 1             | Extension Manager     | List, enable/disable          | ✅ done      |
-| 2             | Bridge + Socket       | App ↔ Shell IPC               | ✅ done      |
-| 3             | Log Viewer            | Live filtered logs            | ✅ done      |
-| 4             | Profiler V1           | Timing table + flame graph    | ✅ done      |
-| 5             | Inspector             | stateObj live view (R/O)      | ✅ done      |
-| —             | Pre-release           | Polish, GitHub, Flatpak       | in progress  |
-| —             | **V1 Release**        | **tag v1.0.0**                | **upcoming** |
-| 6             | GitHub clone          | Install extensions (V2)       | planned      |
-| 7             | Memory profiling      | Heap analysis (V2)            | planned      |
-| 8             | Health checks         | Linting + validation (V2+)    | planned      |
-| 9             | Settings              | Preferences window (V2+)      | planned      |
-| 10            | Extended packaging    | RPM + Flathub full (V2+)      | planned      |
-| 11            | Inspector writable    | Full property editing (V2+)   | planned      |
-| —             | opt-in Developer API  | Extension author integration  | deferred ∞   |
-
----
-
-## Implementation Notes
-
-### Async strategy (Python)
-
-Use `asyncio` with `gbulb` or `asyncio`'s GLib integration to bridge the GLib main loop
-with `asyncio` coroutines. All socket I/O and subprocess communication should be async.
-Never block with `subprocess.run()` on the main thread.
-
-### Wayland compatibility
-
-Avoid `org.gnome.Shell Eval` entirely for runtime introspection — it is restricted on Wayland
-and may be disabled in future GNOME versions. All deep operations go through the bridge socket.
-
-### Profile event JSON schema (v1)
-
-```json
-{
-  "type": "profile_event",
-  "extensionUuid": "my-ext@example.com",
-  "function": "MyClass.prototype.init",
-  "start": 1714901234.123456,
-  "end":   1714901234.456789,
-  "depth": 2
-}
-```
+| Phase | Milestone            | Scope                        | Status       |
+| ----- | -------------------- | ---------------------------- | ------------ |
+| 0     | Skeleton + CI        | Project setup                | ✅ done       |
+| 1     | Extension Manager    | List, enable/disable         | ✅ done       |
+| 2     | Bridge + Socket      | App ↔ Shell IPC              | ✅ done       |
+| 3     | Log Viewer           | Live filtered logs           | ✅ done       |
+| 4     | Profiler V1          | Timing table + flame graph   | ✅ done       |
+| 5     | Inspector            | stateObj live view (R/O)     | ✅ done       |
+| —     | Pre-release          | Polish, GitHub, Flatpak      | in progress  |
+| —     | **V1 Release**       | **tag v1.0.0**               | **upcoming** |
+| 6     | GitHub clone         | Install extensions (V2)      | planned      |
+| 7     | Memory profiling     | Heap analysis (V2)           | planned      |
+| 8     | Health checks        | Linting + validation (V2+)   | planned      |
+| 9     | Settings             | Preferences window (V2+)     | planned      |
+| 10    | Extended packaging   | RPM + Flathub full (V2+)     | planned      |
+| 11    | Inspector writable   | Full property editing (V2+)  | planned      |
+| 12    | Startup profiling    | Profile enable() ramp-up (V2+) | planned    |
+| —     | opt-in Developer API | Extension author integration | deferred ∞   |
