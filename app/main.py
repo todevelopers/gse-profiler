@@ -332,7 +332,7 @@ class Application(Adw.Application):
             license_type=Gtk.License.MIT_X11,
             developer_name="Tomáš Gažovič",
             developers=["Tomáš Gažovič"],
-            copyright="© 2024–2026 Tomáš Gažovič",
+            copyright="© 2026 Tomáš Gažovič",
         )
         dialog.present(self._win)
 
