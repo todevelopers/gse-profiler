@@ -327,14 +327,13 @@ class Application(Adw.Application):
             application_icon="application-x-addon",
             version="0.1.0",
             comments="Manage, debug, and profile GNOME Shell extensions.",
-            issue_url="https://github.com/todevelopers/gse-profiler/issues",
+            website="https://github.com/todevelopers/gse-profiler",
+            support_url="https://github.com/todevelopers/gse-profiler/issues",
             license_type=Gtk.License.MIT_X11,
             developer_name="Tomáš Gažovič",
             developers=["Tomáš Gažovič"],
             copyright="© 2024–2026 Tomáš Gažovič",
-            support_url="https://ko-fi.com/tommygunx89",
         )
-        dialog.add_link("GitHub", "https://github.com/todevelopers/gse-profiler")
         dialog.present(self._win)
 
     def do_shutdown(self) -> None:
