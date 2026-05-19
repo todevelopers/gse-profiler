@@ -8,30 +8,15 @@ gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 from gi.repository import Adw, Gio, GLib, Gtk
 
-from app.core.dbus_client import DBusClient, ExtensionState
+from app.core.dbus_client import (
+    ALL_STATE_CSS as _ALL_STATE_CSS,
+    DBusClient,
+    ExtensionState,
+    STATE_LABELS as _STATE_LABELS,
+    TRANSIENT_STATES as _TRANSIENT_STATES,
+)
 
 _log = logging.getLogger(__name__)
-
-# (label text, CSS class or None)
-_STATE_LABELS: dict[int, tuple[str, str | None]] = {
-    ExtensionState.ENABLED: ("Enabled", "success"),
-    ExtensionState.DISABLED: ("Disabled", "dim-label"),
-    ExtensionState.ERROR: ("Error", "error"),
-    ExtensionState.OUT_OF_DATE: ("Out of date", "warning"),
-    ExtensionState.DOWNLOADING: ("Downloading", None),
-    ExtensionState.INITIALIZED: ("Initialized", "dim-label"),
-    ExtensionState.DISABLING: ("Disabling", "dim-label"),
-    ExtensionState.ENABLING: ("Enabling", None),
-    ExtensionState.UNINSTALLED: ("Uninstalled", "dim-label"),
-}
-
-_TRANSIENT_STATES = {
-    ExtensionState.DOWNLOADING,
-    ExtensionState.ENABLING,
-    ExtensionState.DISABLING,
-}
-
-_ALL_STATE_CSS = {css for _, css in _STATE_LABELS.values() if css}
 
 
 class ExtensionManagerView(Gtk.Box):

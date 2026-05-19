@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from enum import IntEnum
 from typing import Any
 
 import gi
@@ -15,7 +16,7 @@ _OBJ_PATH = "/org/gnome/Shell"
 _INTERFACE = "org.gnome.Shell.Extensions"
 
 
-class ExtensionState:
+class ExtensionState(IntEnum):
     ENABLED = 1
     DISABLED = 2
     ERROR = 3
@@ -25,6 +26,28 @@ class ExtensionState:
     DISABLING = 7
     ENABLING = 8
     UNINSTALLED = 99
+
+
+# UI presentation constants — shared by extension_manager and details_view.
+STATE_LABELS: dict[int, tuple[str, str | None]] = {
+    ExtensionState.ENABLED: ("Enabled", "success"),
+    ExtensionState.DISABLED: ("Disabled", "dim-label"),
+    ExtensionState.ERROR: ("Error", "error"),
+    ExtensionState.OUT_OF_DATE: ("Out of date", "warning"),
+    ExtensionState.DOWNLOADING: ("Downloading", None),
+    ExtensionState.INITIALIZED: ("Initialized", "dim-label"),
+    ExtensionState.DISABLING: ("Disabling", "dim-label"),
+    ExtensionState.ENABLING: ("Enabling", None),
+    ExtensionState.UNINSTALLED: ("Uninstalled", "dim-label"),
+}
+TRANSIENT_STATES: frozenset[int] = frozenset({
+    ExtensionState.DOWNLOADING,
+    ExtensionState.ENABLING,
+    ExtensionState.DISABLING,
+})
+ALL_STATE_CSS: frozenset[str] = frozenset(
+    css for _, css in STATE_LABELS.values() if css
+)
 
 
 class DBusClient(GObject.Object):
