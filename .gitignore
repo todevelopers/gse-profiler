@@ -51,3 +51,6 @@ config.local.*
 # Temporary files
 *.tmp
 *.bak
+
+# Code review file
+gse-profiler_code_review.md
