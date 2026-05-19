@@ -365,6 +365,56 @@ adjustment across major GNOME versions.
 
 ---
 
+## Phase 13: Global Keyboard Shortcuts (V2+)
+
+**Goal:** Start/stop profiling via a keyboard shortcut even when the app has lost focus — e.g. while clicking around in the extension under test.
+
+### Why it works here but not in GTK4 alone
+
+A standard GTK4 app cannot capture keys while it has no focus — and on Wayland `XGrabKey` (the old X11 hack) is simply unavailable. The bridge, however, runs inside `gnome-shell` and can call `global.display.add_keybinding()`, which is a first-class Mutter API that works on both X11 and Wayland. The shortcut press fires in the shell process, the bridge sends a `toggle_profiling` message over the existing Unix socket, and the app reacts exactly as if the Start/Stop button was clicked.
+
+### Bridge side
+
+- [ ] Add a GSettings schema to the bridge extension (`gse-profiler-bridge@todevelopers.gschema.xml`)
+  - Key: `toggle-profiling` — type `as` (array of strings), default `['<Super>F9']`
+  - Compile schema with `glib-compile-schemas` on bridge install
+- [ ] In `extension.js` `enable()`: register keybinding  
+  ```js
+  global.display.add_keybinding(
+      'toggle-profiling',
+      this._settings,
+      Meta.KeyBindingFlags.NONE,
+      () => this._socketClient.send({ type: 'toggle_profiling' })
+  );
+  ```
+- [ ] In `extension.js` `disable()`: remove keybinding via `global.display.remove_keybinding('toggle-profiling')`
+- [ ] Guard: only send `toggle_profiling` when socket is connected — ignore silently otherwise
+
+### App side
+
+- [ ] Handle `toggle_profiling` message in `profiler_view.py` — same logic as clicking Start/Stop
+- [ ] Show `Adw.Toast` "Profiling started / stopped (keyboard shortcut)" to confirm the action
+
+### Settings integration (ties into Phase 9)
+
+- [ ] Expose the `toggle-profiling` GSettings key in `AdwPreferencesWindow` (Phase 9) so users can rebind it without editing schema files
+- [ ] Sync displayed shortcut badge next to the Start/Stop button with the current GSettings value
+
+### Protocol additions
+
+```
+→ (none — bridge-initiated)
+← { type: "toggle_profiling" }   (bridge → app, existing transport)
+```
+
+### Notes
+
+- Default `<Super>F9` is chosen to avoid conflicts with common app shortcuts; document it in the README
+- On Wayland this requires `gnome-shell` 45+ (Mutter API stable); add a shell-version guard in `metadata.json`
+- User must restart the bridge (or re-enable the extension) after a schema change
+
+---
+
 ## Deferred — opt-in Developer API
 
 > **Status: deferred indefinitely.** The core tooling covers the developer use-case well enough for V1 and V2. Revisit only if there is concrete demand.
@@ -397,4 +447,5 @@ adjustment across major GNOME versions.
 | 10    | Extended packaging   | RPM + Flathub full (V2+)     | planned      |
 | 11    | Inspector writable   | Full property editing (V2+)  | planned      |
 | 12    | Startup profiling    | Profile enable() ramp-up (V2+) | planned    |
+| 13    | Global shortcuts     | Toggle profiling via keybinding (V2+) | planned |
 | —     | opt-in Developer API | Extension author integration | deferred ∞   |
