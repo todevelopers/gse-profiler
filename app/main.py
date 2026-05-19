@@ -329,7 +329,6 @@ class Application(Adw.Application):
             comments="Manage, debug, and profile GNOME Shell extensions.",
             website="https://github.com/todevelopers/gse-profiler",
             issue_url="https://github.com/todevelopers/gse-profiler/issues",
-            support_url="https://github.com/todevelopers/gse-profiler/issues",
             license_type=Gtk.License.MIT_X11,
             developer_name="Tomáš Gažovič",
             developers=["Tomáš Gažovič"],
