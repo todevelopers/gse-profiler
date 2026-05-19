@@ -91,6 +91,15 @@ class InspectorView(Gtk.Stack):
         disabled.set_description("Enable the extension to inspect its state object.")
         self.add_named(disabled, "disabled")
 
+        bridge_offline = Adw.StatusPage()
+        bridge_offline.set_icon_name("network-offline-symbolic")
+        bridge_offline.set_title("Bridge Extension Offline")
+        bridge_offline.set_description(
+            "The bridge extension is not running. Enable it in the Extensions tab"
+            " and wait for it to connect."
+        )
+        self.add_named(bridge_offline, "bridge-offline")
+
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add_named(content, "content")
         self.set_visible_child_name("no-selection")
@@ -451,8 +460,11 @@ class InspectorView(Gtk.Stack):
         if self._dbus.get_extension_state(uuid) != ExtensionState.ENABLED:
             self.set_visible_child_name("disabled")
             return
+        if not self._socket.is_client_connected:
+            self.set_visible_child_name("bridge-offline")
+            return
         self.set_visible_child_name("content")
-        if (prev != "content" or force) and self._socket.is_client_connected:
+        if prev != "content" or force:
             self._socket.send({"type": "inspect", "uuid": uuid, "path": self._current_path})
             self._status_lbl.set_label("Loading…")
 
@@ -536,12 +548,8 @@ class InspectorView(Gtk.Stack):
 
     def _on_client_connected(self, _server: SocketServer) -> None:
         if self._current_uuid:
-            self._socket.send({
-                "type": "inspect",
-                "uuid": self._current_uuid,
-                "path": self._current_path,
-            })
-            self._status_lbl.set_label("Loading…")
+            self._update_visible_child(force=True)
 
     def _on_disconnected(self, _server: SocketServer) -> None:
         self._status_lbl.set_label("Disconnected")
+        self._update_visible_child()

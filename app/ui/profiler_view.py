@@ -157,6 +157,7 @@ class ProfilerView(Gtk.Stack):
         self._build_ui()
 
         socket_server.connect("message-received", self._on_message)
+        socket_server.connect("client-connected", self._on_client_connected)
         socket_server.connect("client-disconnected", self._on_client_disconnected)
         dbus_client.connect("extensions-changed", self._on_extensions_changed)
 
@@ -180,6 +181,26 @@ class ProfilerView(Gtk.Stack):
             "Enable the extension to start"
         ))
         self.add_named(disabled, "disabled")
+
+        bridge_offline_page = Adw.StatusPage()
+        bridge_offline_page.set_icon_name("network-offline-symbolic")
+        bridge_offline_page.set_title("Bridge Extension Offline")
+        bridge_offline_page.set_description(
+            "The bridge extension is not running. Enable it in the Extensions tab"
+            " to start profiling, or load a saved profile from a file."
+        )
+        bo_actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bo_actions.set_halign(Gtk.Align.CENTER)
+        bo_open_btn = Gtk.Button()
+        bo_open_inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        bo_open_inner.append(Gtk.Image.new_from_icon_name("document-open-symbolic"))
+        bo_open_inner.append(Gtk.Label(label="Open File…"))
+        bo_open_btn.set_child(bo_open_inner)
+        bo_open_btn.add_css_class("pill")
+        bo_open_btn.connect("clicked", self._on_load)
+        bo_actions.append(bo_open_btn)
+        bridge_offline_page.set_child(bo_actions)
+        self.add_named(bridge_offline_page, "bridge-offline")
 
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add_named(content, "content")
@@ -861,8 +882,13 @@ class ProfilerView(Gtk.Stack):
             self.set_visible_child_name("disabled")
             self._start_stop_btn.set_sensitive(False)
             return
+        bridge_online = self._socket.is_client_connected
+        if not bridge_online and not self._raw_events:
+            self.set_visible_child_name("bridge-offline")
+            self._start_stop_btn.set_sensitive(False)
+            return
         self.set_visible_child_name("content")
-        self._start_stop_btn.set_sensitive(True)
+        self._start_stop_btn.set_sensitive(bridge_online)
 
     def _on_extensions_changed(
         self, _dbus: DBusClient, _extensions: dict[str, Any]
@@ -898,6 +924,7 @@ class ProfilerView(Gtk.Stack):
         enabled = (
             self._target_uuid is not None
             and self._dbus.get_extension_state(self._target_uuid) == ExtensionState.ENABLED
+            and self._socket.is_client_connected
         )
         self._start_stop_btn.set_sensitive(enabled)
 
@@ -1023,6 +1050,7 @@ class ProfilerView(Gtk.Stack):
         self._start_stop_btn.set_sensitive(
             uuid is not None
             and self._dbus.get_extension_state(uuid) == ExtensionState.ENABLED
+            and self._socket.is_client_connected
         )
         self._flush_refresh()
 
@@ -1094,9 +1122,13 @@ class ProfilerView(Gtk.Stack):
         else:
             _log.debug("message received from bridge: type=%s", msg_type)
 
+    def _on_client_connected(self, _server: SocketServer) -> None:
+        self._update_visible_child()
+
     def _on_client_disconnected(self, _server: SocketServer) -> None:
         if self._profiling:
             self._set_stopped()
+        self._update_visible_child()
 
     # ── Data management ──────────────────────────────────────────────────
 
