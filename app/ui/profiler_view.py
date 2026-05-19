@@ -13,7 +13,7 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient, ExtensionState
 from app.core.socket_server import SocketServer
@@ -224,6 +224,14 @@ class ProfilerView(Gtk.Stack):
 
         content.append(self._build_toolbar())
 
+        shortcut_ctrl = Gtk.ShortcutController()
+        shortcut_ctrl.set_scope(Gtk.ShortcutScope.MANAGED)
+        shortcut_ctrl.add_shortcut(Gtk.Shortcut.new(
+            Gtk.KeyvalTrigger.new(Gdk.KEY_s, Gdk.ModifierType.CONTROL_MASK),
+            Gtk.CallbackAction.new(self._on_save_shortcut),
+        ))
+        self.add_controller(shortcut_ctrl)
+
         # Sub-stack: empty placeholder vs. populated dashboard
         self._inner_stack = Gtk.Stack()
         self._inner_stack.set_vexpand(True)
@@ -276,7 +284,7 @@ class ProfilerView(Gtk.Stack):
 
         self._save_btn = Gtk.Button(icon_name="document-save-symbolic")
         self._save_btn.add_css_class("flat")
-        self._save_btn.set_tooltip_text("Save profile to JSON file")
+        self._save_btn.set_tooltip_text("Save profile to JSON file (Ctrl+S)")
         self._save_btn.set_sensitive(False)
         self._save_btn.connect("clicked", self._on_save)
         toolbar.append(self._save_btn)
@@ -984,6 +992,11 @@ class ProfilerView(Gtk.Stack):
             self._rec_revealer.set_reveal_child(True)
         else:
             self._rec_revealer.set_reveal_child(False)
+
+    def _on_save_shortcut(self, _widget: Gtk.Widget, _args: object) -> bool:
+        if self._save_btn.get_sensitive():
+            self._on_save(None)
+        return True
 
     def _on_save(self, _btn: Gtk.Button) -> None:
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")

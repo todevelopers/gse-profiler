@@ -13,7 +13,7 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
 
 from collections import deque
 
@@ -233,7 +233,7 @@ class LogViewerView(Gtk.Box):
 
         export_btn = Gtk.Button(icon_name="document-save-symbolic")
         export_btn.add_css_class("flat")
-        export_btn.set_tooltip_text("Export visible log (.txt or .json)")
+        export_btn.set_tooltip_text("Export visible log (.txt or .json) (Ctrl+S)")
         export_btn.connect("clicked", self._on_export)
 
         self._cmd_toggle_btn = Gtk.ToggleButton()
@@ -381,6 +381,14 @@ class LogViewerView(Gtk.Box):
         self.append(self._cmd_revealer)
         self.append(status_bar)
         self.append(self._list_stack)
+
+        shortcut_ctrl = Gtk.ShortcutController()
+        shortcut_ctrl.set_scope(Gtk.ShortcutScope.MANAGED)
+        shortcut_ctrl.add_shortcut(Gtk.Shortcut.new(
+            Gtk.KeyvalTrigger.new(Gdk.KEY_s, Gdk.ModifierType.CONTROL_MASK),
+            Gtk.CallbackAction.new(self._on_export_shortcut),
+        ))
+        self.add_controller(shortcut_ctrl)
 
         self._update_status_label()
 
@@ -604,6 +612,10 @@ class LogViewerView(Gtk.Box):
 
     def _on_selection_changed(self, _sel: Gtk.MultiSelection, _pos: int, _n: int) -> None:
         self._copy_btn.set_sensitive(self._selection.get_selection().get_size() > 0)
+
+    def _on_export_shortcut(self, _widget: Gtk.Widget, _args: object) -> bool:
+        self._on_export(None)
+        return True
 
     def _on_export(self, _btn: Gtk.Button) -> None:
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
