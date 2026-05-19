@@ -5,6 +5,9 @@ import { SocketClient } from './socket_client.js';
 import { Profiler } from './profiler.js';
 import { Inspector } from './inspector.js';
 
+const DEBUG = false;
+function _dbg(...args) { if (DEBUG) { log(...args); } }
+
 const COMPANION_UUID = 'gse-profiler-bridge@todevelopers';
 
 export default class GSEProfilerBridge extends Extension {
@@ -49,23 +52,23 @@ export default class GSEProfilerBridge extends Extension {
 
     /** @param {object} msg */
     _onMessage(msg) {
-        log(`[gse-profiler-bridge] _onMessage: type=${msg.type} keys=${Object.keys(msg).join(',')}`);
+        _dbg(`[gse-profiler-bridge] _onMessage: type=${msg.type}`);
         switch (msg.type) {
         case 'start_profiling': {
-            log(`[gse-profiler-bridge] start_profiling: uuid=${msg.uuid} profiler=${!!this._profiler}`);
+            _dbg(`[gse-profiler-bridge] start_profiling: uuid=${msg.uuid}`);
             const ok = this._profiler?.startProfiling(msg.uuid) ?? false;
-            log(`[gse-profiler-bridge] start_profiling result: ok=${ok}`);
+            _dbg(`[gse-profiler-bridge] start_profiling result: ok=${ok}`);
             this._socketClient?.send({ type: 'profiling_started', uuid: msg.uuid, ok });
             break;
         }
         case 'stop_profiling':
-            log('[gse-profiler-bridge] stop_profiling received');
+            _dbg('[gse-profiler-bridge] stop_profiling received');
             this._profiler?.stopProfiling();
             this._socketClient?.send({ type: 'profiling_stopped' });
             break;
         case 'inspect': {
             const path = msg.path ?? [];
-            log(`[gse-profiler-bridge] inspect: uuid=${msg.uuid} path=[${path.join(',')}]`);
+            _dbg(`[gse-profiler-bridge] inspect: uuid=${msg.uuid} path=[${path.join(',')}]`);
             const result = this._inspector?.inspect(msg.uuid, path) ?? { properties: [] };
             this._socketClient?.send({ type: 'inspect_result', extensionUuid: msg.uuid, path, ...result });
             break;

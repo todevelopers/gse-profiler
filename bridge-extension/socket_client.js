@@ -20,6 +20,7 @@ export class SocketClient {
     #outputStream = null;
     #reconnectSource = null;
     #cancellable = null;
+    #encoder = new TextEncoder();
 
     /**
      * @param {string} uuid - bridge extension UUID for the handshake
@@ -79,7 +80,7 @@ export class SocketClient {
         }
         try {
             const line = `${JSON.stringify(message)}\n`;
-            const bytes = new TextEncoder().encode(line);
+            const bytes = this.#encoder.encode(line);
             this.#outputStream.write_all(bytes, null);
         } catch (e) {
             logError(e, '[gse-profiler-bridge] socket send failed');
