@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from collections import deque
 from typing import Any
 
 import gi
@@ -40,6 +41,8 @@ class SocketServer(GObject.Object):
         self._output: Gio.DataOutputStream | None = None
         self._cancellable: Gio.Cancellable | None = None
         self._istream: Gio.DataInputStream | None = None
+        self._send_queue: deque[bytes] = deque()
+        self._writing: bool = False
 
     @property
     def is_client_connected(self) -> bool:
@@ -85,21 +88,45 @@ class SocketServer(GObject.Object):
         self._connection = None
         self._output = None
         self._istream = None
+        self._send_queue.clear()
+        self._writing = False
         _unlink_socket(_socket_path())
 
     def send(self, message: dict[str, Any]) -> None:
-        """Send a JSON message to the bridge extension."""
+        """Send a JSON message to the bridge extension (non-blocking)."""
         if not self._output:
             _log.debug("send() dropped — no client connected: %s", message.get("type"))
             return
         _log.debug("send() → %s", message)
+        self._send_queue.append((json.dumps(message) + "\n").encode())
+        if not self._writing:
+            self._flush_send_queue()
+
+    def _flush_send_queue(self) -> None:
+        if not self._send_queue or not self._output:
+            self._writing = False
+            return
+        self._writing = True
+        blob = GLib.Bytes.new(self._send_queue.popleft())
+        self._output.write_bytes_async(
+            blob, GLib.PRIORITY_DEFAULT, None, self._on_write_done, None
+        )
+
+    def _on_write_done(
+        self,
+        stream: Gio.DataOutputStream,
+        result: Gio.AsyncResult,
+        _user_data: object,
+    ) -> None:
         try:
-            data = (json.dumps(message) + "\n").encode()
-            self._output.write_all(data, None)
-            self._output.flush(None)
-            _log.debug("send() OK (%d bytes)", len(data))
+            stream.write_bytes_finish(result)
+            _log.debug("send() OK")
         except GLib.Error as exc:
             _log.warning("Failed to send message: %s", exc)
+            self._send_queue.clear()
+            self._writing = False
+            return
+        self._flush_send_queue()
 
     # ── Private ───────────────────────────────────────────────────────────
 
@@ -166,6 +193,8 @@ class SocketServer(GObject.Object):
             self._connection = None
             self._output = None
             self._istream = None
+            self._send_queue.clear()
+            self._writing = False
             self.emit("client-disconnected")
             return
 
@@ -174,6 +203,8 @@ class SocketServer(GObject.Object):
             self._connection = None
             self._output = None
             self._istream = None
+            self._send_queue.clear()
+            self._writing = False
             self.emit("client-disconnected")
             return
 
