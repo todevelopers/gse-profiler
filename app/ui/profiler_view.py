@@ -1059,6 +1059,7 @@ class ProfilerView(Gtk.Stack):
         self._file_label.set_text("")
         self._file_label.set_tooltip_text("")
         self._flush_refresh()
+        self._update_visible_child()
 
     # ── Filter / selection wiring ─────────────────────────────────────────
 
