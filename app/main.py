@@ -332,6 +332,7 @@ class Application(Adw.Application):
             developer_name="Tomáš Gažovič",
             developers=["Tomáš Gažovič"],
             copyright="© 2024–2026 Tomáš Gažovič",
+            support_url="https://ko-fi.com/tommygunx89",
         )
         dialog.add_link("GitHub", "https://github.com/todevelopers/gse-profiler")
         dialog.present(self._win)
