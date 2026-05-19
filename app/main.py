@@ -322,7 +322,8 @@ class Application(Adw.Application):
         )
 
     def _on_about(self, _action: Gio.SimpleAction, _param: object) -> None:
-        dialog = Adw.AboutDialog(
+        window = Adw.AboutWindow(
+            transient_for=self._win,
             application_name="GSE Profiler",
             application_icon="application-x-addon",
             version="0.1.0",
@@ -334,7 +335,7 @@ class Application(Adw.Application):
             developers=["Tomáš Gažovič"],
             copyright="© 2026 Tomáš Gažovič",
         )
-        dialog.present(self._win)
+        window.present()
 
     def do_shutdown(self) -> None:
         self._bridge.deactivate()
