@@ -152,6 +152,9 @@ class MainWindow(Adw.ApplicationWindow):
         section.append("Reinstall Bridge", "win.reinstall-bridge")
         section.append("Uninstall Bridge", "win.uninstall-bridge")
         menu.append_section("Bridge Extension", section)
+        about_section = Gio.Menu()
+        about_section.append("About GSE Profiler", "app.about")
+        menu.append_section(None, about_section)
 
         menu_btn = Gtk.MenuButton()
         menu_btn.set_icon_name("open-menu-symbolic")
@@ -294,6 +297,9 @@ class Application(Adw.Application):
             bridge=self._bridge,
         )
         self.set_accels_for_action("win.toggle-sidebar", ["F9"])
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self._on_about)
+        self.add_action(about_action)
         self._win.present()
         self._bootstrap_handler = self._dbus_client.connect(
             "extensions-changed", self._on_ready_for_bootstrap
@@ -314,6 +320,21 @@ class Application(Adw.Application):
             provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
+
+    def _on_about(self, _action: Gio.SimpleAction, _param: object) -> None:
+        dialog = Adw.AboutDialog(
+            application_name="GSE Profiler",
+            application_icon="application-x-addon",
+            version="0.1.0",
+            comments="Manage, debug, and profile GNOME Shell extensions.",
+            website="https://github.com/todevelopers/gse-profiler",
+            issue_url="https://github.com/todevelopers/gse-profiler/issues",
+            license_type=Gtk.License.MIT_X11,
+            developer_name="Tomáš Gažovič",
+            developers=["Tomáš Gažovič"],
+            copyright="© 2024–2026 Tomáš Gažovič",
+        )
+        dialog.present(self._win)
 
     def do_shutdown(self) -> None:
         self._bridge.deactivate()
