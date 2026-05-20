@@ -164,10 +164,10 @@ Phases 6–11 go beyond V1 with constructive additions.
 
 ### Polish & UX
 
-- [ ] Visual review pass — spacing, colours, icon consistency across all views
-- [ ] Keyboard shortcuts (`Gtk.ShortcutController`): `Ctrl+R` refresh, `Ctrl+F` search, `Ctrl+S` save
-- [ ] Onboarding flow for first launch (bridge not installed → step-by-step dialog)
-- [ ] Error states and empty states reviewed in every view
+- [x] Visual review pass — spacing, colours, icon consistency across all views
+- [x] Keyboard shortcuts (`Gtk.ShortcutController`): `Ctrl+R` refresh, `Ctrl+F` search, `Ctrl+S` save. Note: Partially, full shortcuts will be added post v1
+- [x] Onboarding flow for first launch (bridge not installed → step-by-step dialog)
+- [x] Error states and empty states reviewed in every view
 
 ### GitHub repository prep
 
@@ -275,13 +275,16 @@ nested object paths and `Gio.Settings`, so it belongs in V2.
   
       then assign to `target[name]`. Honour both data descriptors with `writable: true`
       and accessor descriptors with a setter.
+
 - [ ] Detect `Gio.Settings` instances during serialization; expose their keys as
   
       writable children with their declared schema type (`b`, `i`, `d`, `s`, enums).
+
 - [ ] Re-introduce a `writable` flag in `inspect_result` for each property — only
   
       `true` when the property is actually assignable on the current `holder`
       (own data prop, accessor with setter, or known GSettings key).
+
 - [ ] Validate `set_property` values against the property's reported type before
   
       assigning; reject with a typed error instead of throwing.
@@ -291,16 +294,22 @@ nested object paths and `Gio.Settings`, so it belongs in V2.
 - [ ] Render a "writable" affordance on rows that can be edited (e.g. an edit
   
       pencil icon that appears on hover, mirroring the drill-in chevron).
+
 - [ ] Adwaita `AlertDialog` for edit, with a control matched to the type:
+  
   - String → `Gtk.Entry`
   - Number → `Gtk.SpinButton` with min/max from GSettings schema where known
   - Boolean → `Gtk.Switch`
   - Enum (GSettings choice key) → `Gtk.DropDown` populated with allowed values
+
 - [ ] Send `set_property` with the current navigation `path` and the row `name`.
+
 - [ ] On `set_property_result.ok` → re-issue `inspect` at the current path and
   
       flash the affected row briefly to confirm the write.
+
 - [ ] On `set_property_result.error` → `Adw.Toast` with the bridge's error message.
+
 - [ ] Drop stale `set_property_result`s where `extensionUuid` / `path` no longer
   
       match the active navigation (same pattern as stale `inspect_result`s).
@@ -343,13 +352,16 @@ adjustment across major GNOME versions.
 ### Planned scope (Variant A)
 
 **Bridge side**
+
 - [ ] New message handler `enable_and_profile { uuid }` in `extension.js`
 - [ ] `Profiler.armForEnable(uuid)` — connects to `extensionManager`'s
+  
       `extension-state-changed`, patches `stateObj` on first ENABLED transition,
       then disconnects the signal handler
 - [ ] Teardown: if enable fails or takes > 10 s, disarm and emit `profiling_error`
 
 **App side**
+
 - [ ] "Profile startup" button on the "Extension Disabled" status page in `profiler_view.py`
 - [ ] On click: send `enable_and_profile`, then call `dbus_client.enable_extension(uuid)`
 - [ ] Handle `profiling_started { ok: false }` — show toast "Extension failed to enable"
@@ -379,6 +391,7 @@ A standard GTK4 app cannot capture keys while it has no focus — and on Wayland
   - Key: `toggle-profiling` — type `as` (array of strings), default `['<Super>F9']`
   - Compile schema with `glib-compile-schemas` on bridge install
 - [ ] In `extension.js` `enable()`: register keybinding  
+  
   ```js
   global.display.add_keybinding(
       'toggle-profiling',
@@ -430,22 +443,22 @@ A standard GTK4 app cannot capture keys while it has no focus — and on Wayland
 
 ## Milestone Summary
 
-| Phase | Milestone            | Scope                        | Status       |
-| ----- | -------------------- | ---------------------------- | ------------ |
-| 0     | Skeleton + CI        | Project setup                | ✅ done       |
-| 1     | Extension Manager    | List, enable/disable         | ✅ done       |
-| 2     | Bridge + Socket      | App ↔ Shell IPC              | ✅ done       |
-| 3     | Log Viewer           | Live filtered logs           | ✅ done       |
-| 4     | Profiler V1          | Timing table + flame graph   | ✅ done       |
-| 5     | Inspector            | stateObj live view (R/O)     | ✅ done       |
-| —     | Pre-release          | Polish, GitHub, Flatpak      | in progress  |
-| —     | **V1 Release**       | **tag v1.0.0**               | **upcoming** |
-| 6     | GitHub clone         | Install extensions (V2)      | planned      |
-| 7     | Memory profiling     | Heap analysis (V2)           | planned      |
-| 8     | Health checks        | Linting + validation (V2+)   | planned      |
-| 9     | Settings             | Preferences window (V2+)     | planned      |
-| 10    | Extended packaging   | RPM + Flathub full (V2+)     | planned      |
-| 11    | Inspector writable   | Full property editing (V2+)  | planned      |
-| 12    | Startup profiling    | Profile enable() ramp-up (V2+) | planned    |
-| 13    | Global shortcuts     | Toggle profiling via keybinding (V2+) | planned |
-| —     | opt-in Developer API | Extension author integration | deferred ∞   |
+| Phase | Milestone            | Scope                                 | Status       |
+| ----- | -------------------- | ------------------------------------- | ------------ |
+| 0     | Skeleton + CI        | Project setup                         | ✅ done       |
+| 1     | Extension Manager    | List, enable/disable                  | ✅ done       |
+| 2     | Bridge + Socket      | App ↔ Shell IPC                       | ✅ done       |
+| 3     | Log Viewer           | Live filtered logs                    | ✅ done       |
+| 4     | Profiler V1          | Timing table + flame graph            | ✅ done       |
+| 5     | Inspector            | stateObj live view (R/O)              | ✅ done       |
+| —     | Pre-release          | Polish, GitHub, Flatpak               | in progress  |
+| —     | **V1 Release**       | **tag v1.0.0**                        | **upcoming** |
+| 6     | GitHub clone         | Install extensions (V2)               | planned      |
+| 7     | Memory profiling     | Heap analysis (V2)                    | planned      |
+| 8     | Health checks        | Linting + validation (V2+)            | planned      |
+| 9     | Settings             | Preferences window (V2+)              | planned      |
+| 10    | Extended packaging   | RPM + Flathub full (V2+)              | planned      |
+| 11    | Inspector writable   | Full property editing (V2+)           | planned      |
+| 12    | Startup profiling    | Profile enable() ramp-up (V2+)        | planned      |
+| 13    | Global shortcuts     | Toggle profiling via keybinding (V2+) | planned      |
+| —     | opt-in Developer API | Extension author integration          | deferred ∞   |
