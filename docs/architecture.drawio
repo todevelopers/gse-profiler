@@ -1,0 +1,106 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="gse-profiler Architecture" id="gse-profiler-arch">
+    <mxGraphModel dx="1414" dy="863" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="gnome-shell-container" parent="1" style="swimlane;startSize=30;fillColor=#1a1033;strokeColor=#a855f7;strokeWidth=2;dashed=1;dashPattern=8 4;fontColor=#c084fc;fontSize=13;fontStyle=1;align=center;" value="GNOME Shell Process" vertex="1">
+          <mxGeometry height="430" width="690" x="570" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="bridge-container" parent="gnome-shell-container" style="swimlane;startSize=40;fillColor=#1e1035;strokeColor=#a855f7;strokeWidth=2;fontColor=#d8b4fe;fontSize=13;fontStyle=1;align=center;" value="Bridge Extension" vertex="1">
+          <mxGeometry height="360" width="280" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="bridge-subtitle" parent="bridge-container" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#9f7aea;fontSize=10;" value="GJS / ES6 · gse-profiler-bridge@todevelopers" vertex="1">
+          <mxGeometry height="20" width="260" x="10" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="socket-client-js" parent="bridge-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4c1d95;strokeColor=#a78bfa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;socket_client.js&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#c4b5fd&#39; style=&#39;font-size:10px&#39;&gt;Unix socket · JSON protocol&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="profiler-js" parent="bridge-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4c1d95;strokeColor=#a78bfa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;profiler.js&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#c4b5fd&#39; style=&#39;font-size:10px&#39;&gt;timing · call stack capture&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="205" as="geometry" />
+        </mxCell>
+        <mxCell id="inspector-js" parent="bridge-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#4c1d95;strokeColor=#a78bfa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;inspector.js&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#c4b5fd&#39; style=&#39;font-size:10px&#39;&gt;property / signal inspection&lt;/font&gt;" vertex="1">
+          <mxGeometry height="50" width="240" x="20" y="270" as="geometry" />
+        </mxCell>
+        <mxCell id="inspected-container" parent="gnome-shell-container" style="swimlane;startSize=40;fillColor=#1e1a14;strokeColor=#f97316;strokeWidth=2;fontColor=#fed7aa;fontSize=13;fontStyle=1;align=center;" value="Inspected Extension" vertex="1">
+          <mxGeometry height="360" width="290" x="380" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="inspected-subtitle" parent="inspected-container" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontColor=#9a7f5a;fontSize=10;" value="Any GJS GNOME Shell Extension" vertex="1">
+          <mxGeometry height="20" width="270" x="10" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="monkey-patch-badge" parent="inspected-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7c2d12;strokeColor=#fb923c;fontColor=#fb923c;fontSize=11;fontStyle=1;" value="monkey-patched at runtime" vertex="1">
+          <mxGeometry height="40" width="250" x="20" y="75" as="geometry" />
+        </mxCell>
+        <mxCell id="wrapped-functions" parent="inspected-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#431407;strokeColor=#f97316;fontColor=#fdba74;fontSize=11;" value="wrapped functions → timing events" vertex="1">
+          <mxGeometry height="45" width="250" x="20" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="signals-props" parent="inspected-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#431407;strokeColor=#f97316;fontColor=#fdba74;fontSize=11;" value="signals · properties inspected" vertex="1">
+          <mxGeometry height="45" width="250" x="20" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="gobject-instances" parent="inspected-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#431407;strokeColor=#f97316;fontColor=#fdba74;fontSize=11;" value="GObject instances explored" vertex="1">
+          <mxGeometry height="45" width="250" x="20" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-events" edge="1" parent="gnome-shell-container" source="inspected-container" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#f97316;strokeWidth=2;strokeDashArray=6 3;fontColor=#fdba74;fontSize=10;fontStyle=2;fillColor=#431407;labelBackgroundColor=#431407;labelBorderColor=none;endArrow=open;endFill=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" target="profiler-js" value="profile events">
+          <mxGeometry relative="1" x="0.1765" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="380" y="270" />
+            </Array>
+            <mxPoint x="350" y="310" as="sourcePoint" />
+            <mxPoint x="350" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-inspect" edge="1" parent="gnome-shell-container" source="inspector-js" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#22c55e;strokeWidth=1.8;fontColor=#4ade80;fontSize=10;fontStyle=1;fillColor=#14532d;labelBackgroundColor=#14532d;labelBorderColor=none;endArrow=open;endFill=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="gobject-instances" value="inspect">
+          <mxGeometry relative="1" x="-0.0649" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="160" y="370" />
+              <mxPoint x="525" y="370" />
+            </Array>
+            <mxPoint x="460" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="app-container" parent="1" style="swimlane;startSize=40;fillColor=#172554;strokeColor=#3b82f6;strokeWidth=2;fontColor=#93c5fd;fontSize=13;fontStyle=1;align=center;" value="GTK4 Desktop App" vertex="1">
+          <mxGeometry height="220" width="300" x="100" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="app-subtitle" parent="app-container" style="text;html=1;align=center;verticalAlign=middle;resizable=0;strokeColor=none;fillColor=none;fontColor=#60a5fa;fontSize=10;" value="Python 3.11+ / PyGObject" vertex="1">
+          <mxGeometry height="20" width="280" x="10" y="42" as="geometry" />
+        </mxCell>
+        <mxCell id="dbus-client" parent="app-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1d4ed8;strokeColor=#60a5fa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;DBusClient&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#bfdbfe&#39; style=&#39;font-size:10px&#39;&gt;dbus_client.py&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="260" x="20" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="socket-server" parent="app-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1d4ed8;strokeColor=#60a5fa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;SocketServer&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#bfdbfe&#39; style=&#39;font-size:10px&#39;&gt;socket_server.py&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="260" x="20" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-dbus" edge="1" parent="1" source="dbus-client" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#3b82f6;strokeWidth=2.5;fontColor=#60a5fa;fontSize=11;fontStyle=1;fillColor=#1e3a5f;labelBackgroundColor=#1e3a5f;labelBorderColor=none;startArrow=open;startFill=0;endArrow=open;endFill=0;" target="dbus-interface" value="D-Bus">
+          <mxGeometry relative="1" x="0.2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-socket" edge="1" parent="1" source="socket-server" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#f97316;strokeWidth=2.5;fontColor=#fb923c;fontSize=11;fontStyle=1;fillColor=#431407;labelBackgroundColor=#431407;labelBorderColor=none;startArrow=open;startFill=0;endArrow=open;endFill=0;" target="socket-client-js" value="Unix Socket / JSON">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-monkey-patch" edge="1" parent="1" source="profiler-js" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#22c55e;strokeWidth=2.5;fontColor=#4ade80;fontSize=11;fontStyle=1;fillColor=#14532d;labelBackgroundColor=#14532d;labelBorderColor=none;endArrow=open;endFill=0;" target="inspected-container" value="monkey-patch">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="910" y="300" />
+              <mxPoint x="970" y="300" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge-install" edge="1" parent="1" source="app-container" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#a855f7;strokeWidth=1.5;strokeDashArray=5 3;fontColor=#c084fc;fontSize=10;fontStyle=2;fillColor=#1a1033;labelBackgroundColor=#1a1033;labelBorderColor=none;endArrow=open;endFill=0;exitX=0.993;exitY=0.044;exitDx=0;exitDy=0;exitPerimeter=0;" value="auto-installs on first launch">
+          <mxGeometry relative="1" x="0.0243" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="589" y="150" />
+            </Array>
+            <mxPoint x="590" y="150" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dbus-interface" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#134e4a;strokeColor=#2dd4bf;fontColor=#ffffff;fontSize=12;" value="org.gnome.Shell.Extensions&lt;br/&gt;&lt;font style=&#39;font-size:10px&#39; color=&#39;#5eead4&#39;&gt;D-Bus interface · list / enable / disable&lt;/font&gt;" vertex="1">
+          <mxGeometry height="55" width="280" x="110" y="410" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
