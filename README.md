@@ -31,17 +31,6 @@ log filtering, object inspection — without leaving the desktop.
 
 ---
 
-## Architecture
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
-    <img alt="gse-profiler architecture diagram" src="docs/architecture-light.svg" width="900">
-  </picture>
-</p>
-
----
-
 ## Quick Start
 
 > Requires Fedora (or any GNOME 48+ distro) running inside an active GNOME session.
@@ -59,18 +48,12 @@ On subsequent runs the same command pulls the latest changes and restarts the ap
 
 ## Architecture
 
-```
-GTK4 App (Python/PyGObject)
-         │
-         ├─ D-Bus ──────────────► org.gnome.Shell.Extensions
-         │                        (list / enable / disable)
-         │
-         └─ Unix Socket (JSON) ──► Bridge Extension (GJS)
-                                         │
-                                         ├── Target extension   (monkey-patch, inspect)
-                                         ├── Core gnome-shell   (optional)
-                                         └── opt-in API bridge
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
+    <img alt="gse-profiler architecture diagram" src="docs/architecture-light.svg" width="900">
+  </picture>
+</p>
 
 The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge`) into
 `~/.local/share/gnome-shell/extensions/`. The bridge runs inside the `gnome-shell` process
