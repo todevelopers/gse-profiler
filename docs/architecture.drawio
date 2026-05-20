@@ -72,12 +72,17 @@
         <mxCell id="socket-server" parent="app-container" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1d4ed8;strokeColor=#60a5fa;fontColor=#ffffff;fontSize=11;" value="&lt;b&gt;SocketServer&lt;/b&gt;&lt;br/&gt;&lt;font color=&#39;#bfdbfe&#39; style=&#39;font-size:10px&#39;&gt;socket_server.py&lt;/font&gt;" vertex="1">
           <mxGeometry height="55" width="260" x="20" y="70" as="geometry" />
         </mxCell>
-        <mxCell id="edge-dbus" edge="1" parent="1" source="dbus-client" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#3b82f6;strokeWidth=2.5;fontColor=#60a5fa;fontSize=11;fontStyle=1;fillColor=#1e3a5f;labelBackgroundColor=#1e3a5f;labelBorderColor=none;startArrow=open;startFill=0;endArrow=open;endFill=0;" target="dbus-interface" value="D-Bus">
+        <mxCell id="edge-dbus" edge="1" parent="1" source="dbus-client" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#3b82f6;strokeWidth=2.5;fontColor=#60a5fa;fontSize=10;fontStyle=1;fillColor=#1e3a5f;labelBackgroundColor=#1e3a5f;labelBorderColor=none;startArrow=open;startFill=0;endArrow=open;endFill=0;" target="dbus-interface" value="&lt;b&gt;D-Bus&lt;/b&gt;&lt;br/&gt;&lt;font style=&apos;font-size:9px&apos; color=&apos;#93c5fd&apos;&gt;ListExtensions · Enable/DisableExtension&lt;br/&gt;ExtensionStateChanged (signal) · LaunchExtensionPrefs&lt;/font&gt;">
           <mxGeometry relative="1" x="0.2" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="edge-socket" edge="1" parent="1" source="socket-server" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#f97316;strokeWidth=2.5;fontColor=#fb923c;fontSize=11;fontStyle=1;fillColor=#431407;labelBackgroundColor=#431407;labelBorderColor=none;startArrow=open;startFill=0;endArrow=open;endFill=0;" target="socket-client-js" value="Unix Socket / JSON">
+        <!-- App → Bridge (commands) -->
+        <mxCell id="edge-socket-cmd" edge="1" parent="1" source="socket-server" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#f97316;strokeWidth=2;fontColor=#fb923c;fontSize=10;fontStyle=1;fillColor=#431407;labelBackgroundColor=#431407;labelBorderColor=none;endArrow=open;endFill=1;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;" target="socket-client-js" value="→  start_profiling · stop_profiling · inspect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <!-- Bridge → App (events) -->
+        <mxCell id="edge-socket-evt" edge="1" parent="1" source="socket-client-js" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#fb923c;strokeWidth=2;fontColor=#fdba74;fontSize=10;fontStyle=2;fillColor=#431407;labelBackgroundColor=#431407;labelBorderColor=none;endArrow=open;endFill=1;exitX=0;exitY=0.65;exitDx=0;exitDy=0;entryX=1;entryY=0.65;entryDx=0;entryDy=0;" target="socket-server" value="←  hello · profile_event · profiling_started · inspect_result">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="edge-monkey-patch" edge="1" parent="1" source="profiler-js" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#22c55e;strokeWidth=2.5;fontColor=#4ade80;fontSize=11;fontStyle=1;fillColor=#14532d;labelBackgroundColor=#14532d;labelBorderColor=none;endArrow=open;endFill=0;" target="inspected-container" value="monkey-patch">
