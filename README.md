@@ -2,7 +2,7 @@
   <img src="app/data/icons/hicolor/scalable/apps/org.gnome.GSEProfiler.svg" width="128" height="128" alt="GSE Profiler">
 </p>
 
-# gse-profiler
+# GSE Profiler
 
 [![CI](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml)
 
