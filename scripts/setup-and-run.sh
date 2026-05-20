@@ -54,13 +54,22 @@ success "Repository is up to date."
 
 # ── Desktop integration ────────────────────────────────────────────────────────
 DESKTOP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
-mkdir -p "$DESKTOP_DIR"
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
+mkdir -p "$DESKTOP_DIR" "$ICON_DIR"
+
 sed "s|@INSTALL_DIR@|$INSTALL_DIR|g" \
     "$INSTALL_DIR/app/data/gse-profiler.desktop.in" \
     > "$DESKTOP_DIR/gse-profiler.desktop"
+
+cp "$INSTALL_DIR/app/data/icons/hicolor/scalable/apps/org.gnome.GSEProfiler.svg" \
+   "$ICON_DIR/org.gnome.GSEProfiler.svg"
+
 command -v update-desktop-database &>/dev/null && \
     update-desktop-database "$DESKTOP_DIR"
-success "Desktop entry installed — GSE Profiler is now in the app launcher."
+command -v gtk-update-icon-cache &>/dev/null && \
+    gtk-update-icon-cache -f -t "${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor"
+
+success "Desktop entry and icon installed — GSE Profiler is now in the app launcher."
 
 # ── Launch ─────────────────────────────────────────────────────────────────────
 info "Starting GSE Profiler in debug mode…"
