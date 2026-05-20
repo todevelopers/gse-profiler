@@ -13,9 +13,9 @@ gi.require_version("Gio", "2.0")
 gi.require_version("GLib", "2.0")
 gi.require_version("Gtk", "4.0")
 gi.require_version("Pango", "1.0")
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
-
 from collections import deque
+
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango
 
 from app.core.dbus_client import DBusClient
 from app.core.journal_reader import JournalReader, LogEntry, parse_extra_args

@@ -10,10 +10,16 @@ from gi.repository import Adw, Gio, GLib, Gtk
 
 from app.core.dbus_client import (
     ALL_STATE_CSS as _ALL_STATE_CSS,
+)
+from app.core.dbus_client import (
+    STATE_LABELS as _STATE_LABELS,
+)
+from app.core.dbus_client import (
+    TRANSIENT_STATES as _TRANSIENT_STATES,
+)
+from app.core.dbus_client import (
     DBusClient,
     ExtensionState,
-    STATE_LABELS as _STATE_LABELS,
-    TRANSIENT_STATES as _TRANSIENT_STATES,
 )
 
 _log = logging.getLogger(__name__)
