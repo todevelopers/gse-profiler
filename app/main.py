@@ -334,6 +334,8 @@ class Application(Adw.Application):
         display = Gdk.Display.get_default()
         if display is None:
             return
+        icon_theme = Gtk.IconTheme.get_for_display(display)
+        icon_theme.add_search_path(str(_PROJECT_ROOT / "app" / "data" / "icons"))
         css_path = _PROJECT_ROOT / "app" / "data" / "style.css"
         if not css_path.exists():
             return
@@ -349,7 +351,7 @@ class Application(Adw.Application):
         window = Adw.AboutWindow(
             transient_for=self._win,
             application_name="GSE Profiler",
-            application_icon="application-x-addon",
+            application_icon="org.gnome.GSEProfiler",
             version=APP_VERSION,
             website="https://github.com/todevelopers/gse-profiler",
             issue_url="https://github.com/todevelopers/gse-profiler/issues",
