@@ -1,5 +1,6 @@
 import logging
 import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,29 @@ from app.ui.profiler_view import ProfilerView
 
 APP_ID = "org.gnome.GSEProfiler"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_BASE_VERSION = "0.1.0"
+
+
+def _compute_version() -> str:
+    try:
+        subprocess.run(
+            ["git", "-C", str(_PROJECT_ROOT), "describe", "--tags", "--exact-match", "HEAD"],
+            capture_output=True, check=True, text=True,
+        )
+        return _BASE_VERSION
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(_PROJECT_ROOT), "rev-parse", "--short", "HEAD"],
+            capture_output=True, check=True, text=True,
+        )
+        return f"{_BASE_VERSION}-alpha+{result.stdout.strip()}"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return f"{_BASE_VERSION}-alpha"
+
+
+APP_VERSION = _compute_version()
 
 
 class _ConnectionChip(Gtk.Label):
@@ -326,7 +350,7 @@ class Application(Adw.Application):
             transient_for=self._win,
             application_name="GSE Profiler",
             application_icon="application-x-addon",
-            version="0.1.0",
+            version=APP_VERSION,
             website="https://github.com/todevelopers/gse-profiler",
             issue_url="https://github.com/todevelopers/gse-profiler/issues",
             support_url="https://github.com/todevelopers/gse-profiler/discussions",
