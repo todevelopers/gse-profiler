@@ -126,10 +126,11 @@ short of that — syntax, imports, widget construction, draw functions —
 use WSL. PyGObject 3.48+, GTK4, and libadwaita-1 are typically already
 installed on a recent Ubuntu WSL.
 
-> **These four checks run automatically via the Claude Code Stop hook**
-> (`.claude/run-tests.ps1`). The hook also runs `ruff check app/` and
-> `pytest`. If any check fails, Claude is blocked from finishing and must
-> fix the errors first. Manual runs below are for debugging only.
+> **These checks run automatically via the Claude Code Stop hook**
+> (`.claude/run-tests.ps1`): `ruff check app/`, `eslint bridge-extension/ api/`,
+> syntax check, WSL headless tests, and `pytest`. If any check fails, Claude
+> is blocked from finishing and must fix the errors first. Manual runs below
+> are for debugging only.
 
 **1. Syntax check (Windows Python is fine here, no `gi` needed):**
 
