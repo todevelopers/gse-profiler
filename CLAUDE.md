@@ -126,9 +126,10 @@ short of that — syntax, imports, widget construction, draw functions —
 use WSL. PyGObject 3.48+, GTK4, and libadwaita-1 are typically already
 installed on a recent Ubuntu WSL.
 
-After every non-trivial change to `app/`, run all four steps below. They
-take a few seconds, catch almost every static error, and don't require a
-display.
+> **These four checks run automatically via the Claude Code Stop hook**
+> (`.claude/run-tests.ps1`). The hook also runs `ruff check app/` and
+> `pytest`. If any check fails, Claude is blocked from finishing and must
+> fix the errors first. Manual runs below are for debugging only.
 
 **1. Syntax check (Windows Python is fine here, no `gi` needed):**
 
@@ -230,4 +231,4 @@ placement, and interaction timing.
 3. **opt-in API must be side-effect free when not connected** — all `DevToolsClient` methods must silently no-op when the bridge socket is unavailable.
 4. **Bridge lifecycle** — always call `disable()` cleanup: disconnect signals, close socket, remove monkey-patches.
 5. **Tests live in `tests/`** — use `pytest`; mock D-Bus and subprocess in unit tests.
-6. **Verify in WSL before reporting done** — run the four headless checks in the "Headless Smoke Testing" section above after any non-trivial `app/` change.
+6. **Checks run automatically** — the Stop hook runs `ruff check`, syntax check, WSL headless tests, and `pytest` after every response. Do not report work as done if the hook is still failing.
