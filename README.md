@@ -57,8 +57,8 @@ On subsequent runs the same command pulls the latest changes and restarts the ap
 
 The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge`) into
 `~/.local/share/gnome-shell/extensions/`. The bridge runs inside the `gnome-shell` process
-and is responsible for monkey-patching, log interception, object inspection, and the developer
-API bridge. It communicates back to the app over a Unix socket using newline-delimited JSON.
+and is responsible for object inspection and monkey-patching (to get profiling data) of selected extension.
+It communicates with the app over a Unix socket using newline-delimited JSON.
 
 Standard GNOME Shell APIs (extension list, enable/disable) are accessed directly via D-Bus.
 
@@ -66,7 +66,7 @@ Standard GNOME Shell APIs (extension list, enable/disable) are accessed directly
 
 ## Requirements
 
-- GNOME 48+
+- GNOME 46+
 - Python 3.11+
 - PyGObject (GTK4 bindings)
 - `git` — for cloning extensions
@@ -119,31 +119,7 @@ application — no manual steps needed. After installation, GNOME Shell must be 
 - **Wayland** — the app will prompt you to log out and log back in
 - **X11** — automatic restart via `Meta.restart()` over D-Bus
 
-The bridge shows a small status indicator in the GNOME panel to confirm it is active.
-The main app window also shows a connection indicator (connected / disconnected).
-
----
-
-## opt-in Developer API
-
-Extension developers can optionally import `api/devtools-api.js` for deeper profiling integration.
-If gse-profiler is not running, all API calls silently **no-op** — your extension works normally
-with zero overhead.
-
-```javascript
-import { DevToolsClient } from '/path/to/api/devtools-api.js';
-
-const devtools = new DevToolsClient();
-devtools.connect('my-extension@example.com');
-
-devtools.mark('init-start');
-// ... your initialization code ...
-devtools.mark('init-end');
-devtools.measure('init', 'init-start', 'init-end');
-
-devtools.counter('network-requests', 1);
-devtools.watch(myObject, ['property1', 'property2']);
-```
+The main app window shows a connection indicator (connected / disconnected).
 
 ---
 
