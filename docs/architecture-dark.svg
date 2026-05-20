@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 555" width="1260" height="555" font-family="&#39;Cantarell&#39;,&#39;Adwaita Sans&#39;,&#39;Inter&#39;,system-ui,-apple-system,&#39;Segoe UI&#39;,sans-serif">
+<defs>
+  <marker id="ao-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ff9763"></path></marker>
+  <marker id="ag-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8ff0a4"></path></marker>
+  <marker id="at-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5bc8d8"></path></marker>
+  <marker id="as-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#a5b3bd"></path></marker>
+</defs>
+
+<rect width="1260" height="555" fill="#1d1d20"></rect>
+
+
+<g>
+  <rect x="440" y="20" width="780" height="520" rx="12" ry="12" fill="rgba(165,179,189,0.06)" stroke="rgba(165,179,189,0.50)" stroke-width="1" stroke-dasharray="6 4"></rect>
+  <text x="464" y="48" font-size="13" font-weight="700" fill="#a5b3bd" letter-spacing="0.04em">GNOME SHELL PROCESS</text>
+</g>
+
+
+<g>
+  <path d="M 220,140 L 220,82 L 510,82 L 510,108" fill="none" stroke="#a5b3bd" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#as-d)"></path>
+  <rect x="240" y="70" width="180" height="24" rx="4" ry="4" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="330" y="85" font-size="10" font-weight="700" fill="#a5b3bd" text-anchor="middle" letter-spacing="0.04em">AUTO-INSTALLS BRIDGE</text>
+</g>
+
+
+<g>
+  <rect x="464" y="108" width="320" height="416" rx="10" ry="10" fill="rgba(203,137,229,0.09)" stroke="rgba(203,137,229,0.50)" stroke-width="1"></rect>
+  <text x="484" y="136" font-size="14" font-weight="700" fill="#cb89e5">Bridge extension</text>
+  <text x="484" y="154" font-size="11" fill="#b8b8bd" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">gse-profiler-bridge@todevelopers</text>
+
+  <g>
+    <rect x="484" y="174" width="280" height="92" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="500" y="200" font-size="14" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">socket_client.js</text>
+    <text x="500" y="226" font-size="12" fill="#b8b8bd">Unix domain socket client</text>
+    <text x="500" y="246" font-size="12" fill="#b8b8bd">newline-delimited JSON protocol</text>
+  </g>
+
+  <g>
+    <rect x="484" y="282" width="280" height="92" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="500" y="308" font-size="14" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">profiler.js</text>
+    <text x="500" y="334" font-size="12" fill="#b8b8bd">function wrapping &amp; timing</text>
+    <text x="500" y="354" font-size="12" fill="#b8b8bd">call-stack capture</text>
+  </g>
+
+  <g>
+    <rect x="484" y="390" width="280" height="92" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="500" y="416" font-size="14" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">inspector.js</text>
+    <text x="500" y="442" font-size="12" fill="#b8b8bd">GObject introspection</text>
+    <text x="500" y="462" font-size="12" fill="#b8b8bd">property &amp; signal enumeration</text>
+  </g>
+</g>
+
+
+<g>
+  <rect x="880" y="108" width="320" height="416" rx="10" ry="10" fill="rgba(255,151,99,0.09)" stroke="rgba(255,151,99,0.50)" stroke-width="1"></rect>
+  <text x="900" y="136" font-size="14" font-weight="700" fill="#ff9763">Inspected extension</text>
+  <text x="900" y="154" font-size="11" fill="#b8b8bd">target · any installed GJS extension</text>
+
+  <g>
+    <rect x="900" y="174" width="280" height="38" rx="6" ry="6" fill="#2a2a2e" stroke="rgba(255,151,99,0.50)" stroke-width="1" stroke-dasharray="4 3"></rect>
+    <text x="1040" y="198" font-size="12" font-weight="700" fill="#ff9763" text-anchor="middle" letter-spacing="0.04em">MONKEY-PATCHED AT RUNTIME</text>
+  </g>
+
+  <g>
+    <rect x="900" y="278" width="280" height="92" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="916" y="304" font-size="13" font-weight="700" fill="#ffffff">Wrapped functions</text>
+    <text x="916" y="326" font-size="12" fill="#b8b8bd">emit timing events on entry / exit</text>
+    <text x="916" y="348" font-size="11" fill="#8a8a90" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">fn → start · end → profile_event</text>
+  </g>
+
+  <g>
+    <rect x="900" y="386" width="280" height="92" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="916" y="412" font-size="13" font-weight="700" fill="#ffffff">Inspected GObjects</text>
+    <text x="916" y="434" font-size="12" fill="#b8b8bd">signals · properties · live object tree</text>
+    <text x="916" y="456" font-size="11" fill="#8a8a90" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">global.stage · uiGroup · GParamSpec</text>
+  </g>
+
+  
+</g>
+
+
+<g>
+  <rect x="40" y="140" width="340" height="220" rx="10" ry="10" fill="rgba(120,174,237,0.10)" stroke="rgba(120,174,237,0.55)" stroke-width="1"></rect>
+  <text x="60" y="168" font-size="14" font-weight="700" fill="#78aeed">GSE Profiler (GTK4 desktop)</text>
+  <text x="60" y="186" font-size="11" fill="#b8b8bd" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">Python 3.11+ · PyGObject</text>
+
+  <g>
+    <rect x="60" y="204" width="300" height="66" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="76" y="228" font-size="14" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">SocketServer</text>
+    <text x="76" y="250" font-size="12" fill="#b8b8bd">accepts bridge connection</text>
+  </g>
+
+  <g>
+    <rect x="60" y="282" width="300" height="66" rx="6" ry="6" fill="#2a2a2e" stroke="#3d3d42" stroke-width="1"></rect>
+    <text x="76" y="306" font-size="14" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">DBusClient</text>
+    <text x="76" y="328" font-size="12" fill="#b8b8bd">talks to org.gnome.Shell.Extensions</text>
+  </g>
+</g>
+
+
+<g>
+  <rect x="40" y="420" width="340" height="74" rx="10" ry="10" fill="rgba(91,200,216,0.10)" stroke="rgba(91,200,216,0.55)" stroke-width="1"></rect>
+  <text x="60" y="446" font-size="13" font-weight="700" fill="#5bc8d8" letter-spacing="0.04em">D-BUS INTERFACE</text>
+  <text x="60" y="466" font-size="13" font-weight="700" fill="#ffffff" font-family="&#39;Adwaita Mono&#39;,ui-monospace,&#39;JetBrains Mono&#39;,&#39;Source Code Pro&#39;,Menlo,Consolas,monospace">org.gnome.Shell.Extensions</text>
+  <text x="60" y="484" font-size="11" fill="#b8b8bd">list · enable · disable · state-change signal</text>
+</g>
+
+
+
+
+<g>
+  <path d="M 360,222 L 484,222" fill="none" stroke="#ff9763" stroke-width="1.5" marker-end="url(#ao-d)"></path>
+  <rect x="386" y="211" width="72" height="22" rx="4" ry="4" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="422" y="226" font-size="10" font-weight="700" fill="#ff9763" text-anchor="middle" letter-spacing="0.04em">COMMANDS</text>
+</g>
+
+
+<g>
+  <path d="M 484,254 L 360,254" fill="none" stroke="#ff9763" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ao-d)"></path>
+  <rect x="386" y="243" width="72" height="22" rx="4" ry="4" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="422" y="258" font-size="10" font-weight="700" fill="#ff9763" text-anchor="middle" letter-spacing="0.04em">EVENTS</text>
+</g>
+
+
+<g>
+  <path d="M 210,348 L 210,420" fill="none" stroke="#5bc8d8" stroke-width="1.5" marker-end="url(#at-d)"></path>
+  <rect x="156" y="373" width="108" height="22" rx="4" ry="4" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="210" y="388" font-size="10" font-weight="700" fill="#5bc8d8" text-anchor="middle" letter-spacing="0.04em">D-BUS CALL</text>
+</g>
+
+
+<g>
+  <path d="M 380,457 L 440,457" fill="none" stroke="#5bc8d8" stroke-width="1" stroke-dasharray="3 3" opacity="0.55" marker-end="url(#at-d)"></path>
+</g>
+
+
+<g>
+  <path d="M 764,305 L 880,305" fill="none" stroke="#8ff0a4" stroke-width="1.5" marker-end="url(#ag-d)"></path>
+  <rect x="777" y="296" width="90" height="18" rx="3" ry="3" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="822" y="308" font-size="10" font-weight="700" fill="#8ff0a4" text-anchor="middle">monkey-patch</text>
+</g>
+
+
+<g>
+  <path d="M 880,345 L 764,345" fill="none" stroke="#ff9763" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ao-d)"></path>
+  <rect x="777" y="336" width="90" height="18" rx="3" ry="3" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="822" y="348" font-size="10" font-weight="700" fill="#ff9763" text-anchor="middle">profile events</text>
+</g>
+
+
+<g>
+  <path d="M 764,432 L 880,432" fill="none" stroke="#8ff0a4" stroke-width="1.5" marker-end="url(#ag-d)"></path>
+  <rect x="777" y="423" width="90" height="18" rx="3" ry="3" fill="#222226" stroke="#3d3d42" stroke-width="1"></rect>
+  <text x="822" y="435" font-size="10" font-weight="700" fill="#8ff0a4" text-anchor="middle">inspect</text>
+</g>
+
+
+</svg>
