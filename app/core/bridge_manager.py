@@ -116,7 +116,9 @@ class BridgeManager:
             "GSE Profiler uses a bridge GNOME Shell extension to enable profiling "
             "and inspection features.\n\n"
             "The extension will be installed and GNOME Shell will need to restart. "
-            "Install now?",
+            "Install now?\n\n"
+            "Note: if you later uninstall this app, remove the bridge extension "
+            "manually first.",
         )
         dialog.add_response("cancel", "Not Now")
         dialog.add_response("install", "Install")
