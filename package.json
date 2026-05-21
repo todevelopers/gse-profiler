@@ -4,8 +4,8 @@
   "private": true,
   "description": "Bridge extension and developer API linting config for GSE Profiler",
   "scripts": {
-    "lint": "eslint bridge-extension/ api/",
-    "lint:fix": "eslint --fix bridge-extension/ api/"
+    "lint": "eslint bridge-extension/",
+    "lint:fix": "eslint --fix bridge-extension/"
   },
   "devDependencies": {
     "eslint": "^8.57.0"

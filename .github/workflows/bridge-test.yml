@@ -4,17 +4,15 @@ on:
   push:
     paths:
       - "bridge-extension/**"
-      - "api/**"
       - ".eslintrc.json"
       - "package.json"
   pull_request:
     paths:
       - "bridge-extension/**"
-      - "api/**"
 
 jobs:
   lint:
-    name: ESLint (bridge + api)
+    name: ESLint (bridge)
     runs-on: ubuntu-latest
 
     steps:
