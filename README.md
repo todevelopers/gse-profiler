@@ -44,6 +44,14 @@ clones the repository to `~/gse-profiler`, and launches the app — no `sudo`, n
 
 On subsequent runs the same command pulls the latest changes and restarts the app.
 
+## Uninstall
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scripts/uninstall.sh | bash
+```
+
+Removes the app repository, desktop entry, icon, and bridge extension. Nothing else on your system is touched.
+
 ---
 
 ## Architecture
