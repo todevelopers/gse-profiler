@@ -177,13 +177,26 @@ Phases 6–11 go beyond V1 with constructive additions.
 - [ ] Icon set: SVG master + rasterised 48 / 64 / 128 px PNG
 - [ ] `CHANGELOG.md` for v1.0.0
 
-### Packaging & distribution
+## Packaging & distribution
 
-- [ ] Flatpak manifest (`build-aux/org.gnome.GSEProfiler.json`)
-  - PyGObject, GTK4, libadwaita as SDK extensions
-  - Bridge extension installed outside sandbox (`--filesystem=home`)
-- [ ] `release.yml` extended: build Flatpak bundle and attach to GitHub Release
-- [ ] Publish to Flathub
+- [ ] Flatpak manifest (`build-aux/io.github.todevelopers.GseProfiler.yml`)
+  
+  * Runtime: `org.gnome.Platform//48` + `org.gnome.Sdk//48` (GTK4, libadwaita, PyGObject included — no SDK extensions needed)
+  * Permissions:
+    * `--talk-name=org.gnome.Shell.Extensions` — D-Bus access for extension manager
+    * `--talk-name=org.freedesktop.Flatpak` — required for `flatpak-spawn --host` (journalctl)
+    * `--socket=session-bus` — Unix socket communication with bridge extension
+    * `--filesystem=~/.local/share/gnome-shell/extensions:create` — bridge extension install
+  * No `git` module — clone feature is excluded from V1 Flatpak build
+  * `journal_reader.py` must detect Flatpak environment (`/.flatpak-info`) and prefix journalctl command with `["flatpak-spawn", "--host"]`
+
+- [ ] Helper files (required for valid Flatpak):
+  
+  * `data/io.github.todevelopers.GseProfiler.metainfo.xml`
+  * `data/io.github.todevelopers.GseProfiler.desktop`
+  * `data/icons/hicolor/128x128/apps/io.github.todevelopers.GseProfiler.png`
+
+- [ ] `release.yml` extended: on `git tag v*`, build Flatpak bundle via `flatpak-builder` and attach `gse-profiler-{version}-x86_64.flatpak` to GitHub Release
 
 ---
 
@@ -354,10 +367,12 @@ adjustment across major GNOME versions.
 **Bridge side**
 
 - [ ] New message handler `enable_and_profile { uuid }` in `extension.js`
+
 - [ ] `Profiler.armForEnable(uuid)` — connects to `extensionManager`'s
   
       `extension-state-changed`, patches `stateObj` on first ENABLED transition,
       then disconnects the signal handler
+
 - [ ] Teardown: if enable fails or takes > 10 s, disarm and emit `profiling_error`
 
 **App side**
@@ -388,8 +403,10 @@ A standard GTK4 app cannot capture keys while it has no focus — and on Wayland
 ### Bridge side
 
 - [ ] Add a GSettings schema to the bridge extension (`gse-profiler-bridge@todevelopers.gschema.xml`)
+  
   - Key: `toggle-profiling` — type `as` (array of strings), default `['<Super>F9']`
   - Compile schema with `glib-compile-schemas` on bridge install
+
 - [ ] In `extension.js` `enable()`: register keybinding  
   
   ```js
@@ -400,7 +417,9 @@ A standard GTK4 app cannot capture keys while it has no focus — and on Wayland
       () => this._socketClient.send({ type: 'toggle_profiling' })
   );
   ```
+
 - [ ] In `extension.js` `disable()`: remove keybinding via `global.display.remove_keybinding('toggle-profiling')`
+
 - [ ] Guard: only send `toggle_profiling` when socket is connected — ignore silently otherwise
 
 ### App side
