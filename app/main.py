@@ -27,7 +27,7 @@ from app.ui.profiler_view import ProfilerView
 
 APP_ID = "io.github.todevelopers.GseProfiler"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_BASE_VERSION = "0.1.1"
+_BASE_VERSION = "0.1.2"
 
 
 def _compute_version() -> str:
