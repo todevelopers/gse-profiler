@@ -132,7 +132,7 @@ class BridgeManager:
         except (OSError, json.JSONDecodeError):
             return False  # installed metadata missing or corrupt — needs reinstall
 
-        return bundled_hash == installed_hash
+        return bool(bundled_hash == installed_hash)
 
     def _prompt_update(self, parent_window: Gtk.Window | None) -> None:
         dialog = Adw.AlertDialog.new(
