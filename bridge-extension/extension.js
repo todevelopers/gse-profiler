@@ -21,7 +21,7 @@ export default class GSEProfilerBridge extends Extension {
     _inspector = null;
 
     enable() {
-        log('[gse-profiler-bridge] Enabled (v0.0.13)');
+        log('[gse-profiler-bridge] Enabled');
 
         this._profiler = new Profiler(event => {
             this._socketClient?.send(event);
@@ -35,6 +35,7 @@ export default class GSEProfilerBridge extends Extension {
 
     disable() {
         log('[gse-profiler-bridge] Disabled');
+        log('[gse-profiler-bridge] cleanup complete');
 
         if (this._profiler) {
             this._profiler.stopProfiling();
