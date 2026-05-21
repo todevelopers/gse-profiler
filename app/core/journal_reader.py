@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import shlex
 import subprocess
 import threading
@@ -13,6 +14,21 @@ gi.require_version("GLib", "2.0")
 from gi.repository import GLib, GObject
 
 _log = logging.getLogger(__name__)
+
+# Detect Flatpak sandbox at import time — /.flatpak-info is created by the runtime.
+_IN_FLATPAK: bool = os.path.exists("/.flatpak-info")
+
+
+def _journalctl_prefix() -> list[str]:
+    """Return the command prefix for invoking journalctl.
+
+    Inside a Flatpak sandbox journalctl is not available directly, so we
+    delegate to flatpak-spawn which runs the command on the host.
+    """
+    if _IN_FLATPAK:
+        return ["flatpak-spawn", "--host", "journalctl"]
+    return ["journalctl"]
+
 
 PRIORITY_NAMES: dict[int, str] = {
     0: "EMERG",
@@ -133,13 +149,12 @@ class JournalReader(GObject.Object):
             self._stop_event.wait(timeout=1.0)
 
     def _do_poll(self, gen: int, initial: bool = False) -> None:
+        base = _journalctl_prefix()
         if self._cursor is None:
-            cmd = [
-                "journalctl", "--no-pager", "-o", "json", "-n", "200",
-            ] + self._extra_args
+            cmd = base + ["--no-pager", "-o", "json", "-n", "200"] + self._extra_args
         else:
-            cmd = [
-                "journalctl", "--no-pager", "-o", "json",
+            cmd = base + [
+                "--no-pager", "-o", "json",
                 f"--after-cursor={self._cursor}",
             ] + self._extra_args
 
