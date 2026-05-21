@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.todevelopers.GseProfiler</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>GSE Profiler</name>
+  <summary>Debug, profile and manage GNOME Shell extensions</summary>
+
+  <description>
+    <p>
+      GSE Profiler is a GTK4 desktop application for managing, debugging,
+      and profiling GNOME Shell extensions. It communicates with a bridge
+      extension running inside gnome-shell to provide live function timing,
+      a flame graph visualizer, a filterable log viewer, and a read-only
+      state inspector.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Extension manager with enable/disable toggle and state badges</li>
+      <li>Live log viewer with UUID filter, log-level filter, and full-text search</li>
+      <li>Flame graph profiler with zoom, pan, and per-function call table</li>
+      <li>Inspector for browsing extension stateObj properties at runtime</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">io.github.todevelopers.GseProfiler.desktop</launchable>
+
+  <url type="homepage">https://github.com/todevelopers/gse-profiler</url>
+  <url type="bugtracker">https://github.com/todevelopers/gse-profiler/issues</url>
+  <url type="contribute">https://github.com/todevelopers/gse-profiler</url>
+
+  <developer id="io.github.todevelopers">
+    <name>Tomáš Gažovič</name>
+  </developer>
+
+  <content_rating type="oars-1.1"/>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <releases>
+    <release version="0.0.9" date="2026-05-21">
+      <description>
+        <p>Test release for Flatpak packaging validation.</p>
+      </description>
+    </release>
+  </releases>
+</component>

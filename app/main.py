@@ -25,12 +25,15 @@ from app.ui.inspector_view import InspectorView
 from app.ui.log_viewer import LogViewerView
 from app.ui.profiler_view import ProfilerView
 
-APP_ID = "org.gnome.GSEProfiler"
+APP_ID = "io.github.todevelopers.GseProfiler"
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
-_BASE_VERSION = "0.1.0"
+_BASE_VERSION = "0.0.9"
 
 
 def _compute_version() -> str:
+    # Inside a Flatpak sandbox there is no git repo — return the baked-in version.
+    if os.path.exists("/.flatpak-info"):
+        return _BASE_VERSION
     try:
         subprocess.run(
             ["git", "-C", str(_PROJECT_ROOT), "describe", "--tags", "--exact-match", "HEAD"],
@@ -351,7 +354,7 @@ class Application(Adw.Application):
         window = Adw.AboutWindow(
             transient_for=self._win,
             application_name="GSE Profiler",
-            application_icon="org.gnome.GSEProfiler",
+            application_icon="io.github.todevelopers.GseProfiler",
             version=APP_VERSION,
             website="https://github.com/todevelopers/gse-profiler",
             issue_url="https://github.com/todevelopers/gse-profiler/issues",

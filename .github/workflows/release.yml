@@ -45,3 +45,27 @@ jobs:
           files: ${{ env.TARBALL }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+  flatpak:
+    name: Build Flatpak
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: gse-profiler-${{ env.VERSION }}-x86_64.flatpak
+          manifest-path: build-aux/io.github.todevelopers.GseProfiler.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+      - name: Attach Flatpak bundle to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gse-profiler-${{ env.VERSION }}-x86_64.flatpak

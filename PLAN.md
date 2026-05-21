@@ -179,24 +179,23 @@ Phases 6–11 go beyond V1 with constructive additions.
 
 ## Packaging & distribution
 
-- [ ] Flatpak manifest (`build-aux/io.github.todevelopers.GseProfiler.yml`)
+- [x] Flatpak manifest (`build-aux/io.github.todevelopers.GseProfiler.yml`)
   
   * Runtime: `org.gnome.Platform//48` + `org.gnome.Sdk//48` (GTK4, libadwaita, PyGObject included — no SDK extensions needed)
   * Permissions:
     * `--talk-name=org.gnome.Shell.Extensions` — D-Bus access for extension manager
     * `--talk-name=org.freedesktop.Flatpak` — required for `flatpak-spawn --host` (journalctl)
-    * `--socket=session-bus` — Unix socket communication with bridge extension
     * `--filesystem=~/.local/share/gnome-shell/extensions:create` — bridge extension install
   * No `git` module — clone feature is excluded from V1 Flatpak build
-  * `journal_reader.py` must detect Flatpak environment (`/.flatpak-info`) and prefix journalctl command with `["flatpak-spawn", "--host"]`
+  * `journal_reader.py` detects Flatpak environment (`/.flatpak-info`) and prefixes journalctl with `["flatpak-spawn", "--host"]` ✓ (already implemented)
 
-- [ ] Helper files (required for valid Flatpak):
+- [x] Helper files (required for valid Flatpak):
   
   * `data/io.github.todevelopers.GseProfiler.metainfo.xml`
   * `data/io.github.todevelopers.GseProfiler.desktop`
-  * `data/icons/hicolor/128x128/apps/io.github.todevelopers.GseProfiler.png`
+  * `app/data/icons/hicolor/scalable/apps/io.github.todevelopers.GseProfiler.svg`
 
-- [ ] `release.yml` extended: on `git tag v*`, build Flatpak bundle via `flatpak-builder` and attach `gse-profiler-{version}-x86_64.flatpak` to GitHub Release
+- [x] `release.yml` extended: on `git tag v*`, build Flatpak bundle via `flatpak-builder` and attach `gse-profiler-{version}-x86_64.flatpak` to GitHub Release
 
 ---
 

@@ -1,0 +1,34 @@
+app-id: io.github.todevelopers.GseProfiler
+runtime: org.gnome.Platform
+runtime-version: '46'
+sdk: org.gnome.Sdk
+command: gse-profiler
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --talk-name=org.gnome.Shell
+  - --talk-name=org.gnome.Shell.Extensions
+  # Required for flatpak-spawn --host used by journal_reader.py
+  - --talk-name=org.freedesktop.Flatpak
+  # Bridge extension install path
+  - --filesystem=~/.local/share/gnome-shell/extensions:create
+
+modules:
+  - name: gse-profiler
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/share/gse-profiler
+      - cp -r app bridge-extension api scripts /app/share/gse-profiler/
+      - install -Dm755 build-aux/gse-profiler.sh /app/bin/gse-profiler
+      - install -Dm644 data/io.github.todevelopers.GseProfiler.desktop
+          /app/share/applications/io.github.todevelopers.GseProfiler.desktop
+      - install -Dm644 data/io.github.todevelopers.GseProfiler.metainfo.xml
+          /app/share/metainfo/io.github.todevelopers.GseProfiler.metainfo.xml
+      - install -Dm644
+          app/data/icons/hicolor/scalable/apps/io.github.todevelopers.GseProfiler.svg
+          /app/share/icons/hicolor/scalable/apps/io.github.todevelopers.GseProfiler.svg
+    sources:
+      - type: dir
+        path: ..
