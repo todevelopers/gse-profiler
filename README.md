@@ -112,9 +112,11 @@ filters out time that belongs to the callee, not the caller.
 
 ## Gallery
 
+<img width="1250" height="810" alt="Flamegraph profiler" src="https://github.com/user-attachments/assets/0789b42d-7ac9-40a2-b1c7-5b6f59f4f7a5" />
+<img width="1250" height="814" alt="Swimlane profiler" src="https://github.com/user-attachments/assets/5c748a07-2dcf-4eec-bdd1-3944cb4ed0fe" />
+<img width="1250" height="814" alt="Histogram profiler" src="https://github.com/user-attachments/assets/fbf80e9a-7a84-449b-9dd1-9cf82382a5e7" />
 <img width="1250" height="818" alt="Extension manager" src="https://github.com/user-attachments/assets/084aceef-e270-46a4-8120-274e519f6cb8" />
 <img width="1250" height="830" alt="Live log viewer" src="https://github.com/user-attachments/assets/74bfa024-e534-43da-8125-f24719e3e092" />
-<img width="1250" height="789" alt="Flamegraph profiler" src="https://github.com/user-attachments/assets/a17c4dcc-7ccd-4348-87fb-6c233a3d797d" />
 
 ---
 
