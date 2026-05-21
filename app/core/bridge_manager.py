@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -16,7 +17,16 @@ from app.core.dbus_client import DBusClient, ExtensionState
 _log = logging.getLogger(__name__)
 
 BRIDGE_UUID = "gse-profiler-bridge@todevelopers"
-_INSTALL_PATH = Path(GLib.get_user_data_dir()) / "gnome-shell" / "extensions" / BRIDGE_UUID
+_IN_FLATPAK: bool = os.path.exists("/.flatpak-info")
+
+# Inside a Flatpak sandbox GLib.get_user_data_dir() returns the app-scoped
+# directory (~/.var/app/<id>/data), not the host ~/.local/share that gnome-shell
+# actually watches.  Use the real home-relative path when sandboxed.
+_INSTALL_PATH = (
+    Path.home() / ".local" / "share" / "gnome-shell" / "extensions" / BRIDGE_UUID
+    if _IN_FLATPAK
+    else Path(GLib.get_user_data_dir()) / "gnome-shell" / "extensions" / BRIDGE_UUID
+)
 
 
 class BridgeManager:

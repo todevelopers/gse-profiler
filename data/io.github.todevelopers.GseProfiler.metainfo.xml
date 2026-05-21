@@ -45,6 +45,11 @@
   </requires>
 
   <releases>
+    <release version="0.0.10" date="2026-05-21">
+      <description>
+        <p>Fix bridge extension install path and logout in Flatpak sandbox.</p>
+      </description>
+    </release>
     <release version="0.0.9" date="2026-05-21">
       <description>
         <p>Test release for Flatpak packaging validation.</p>

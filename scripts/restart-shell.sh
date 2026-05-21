@@ -10,7 +10,12 @@ SESSION="${XDG_SESSION_TYPE:-unknown}"
 if [[ "$SESSION" == "wayland" ]]; then
     echo "Wayland session detected — logging out to reload GNOME Shell."
     echo "Please log back in after the session ends."
-    gnome-session-quit --logout --no-prompt
+    # gnome-session-quit is a host binary — not present in the Flatpak runtime.
+    if [[ -f "/.flatpak-info" ]]; then
+        flatpak-spawn --host gnome-session-quit --logout --no-prompt
+    else
+        gnome-session-quit --logout --no-prompt
+    fi
 else
     echo "X11 session detected — restarting GNOME Shell in place."
     busctl --user call \
