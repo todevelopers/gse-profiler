@@ -11,7 +11,7 @@
 
 A developer toolkit for GNOME Shell extension authors. GSE Profiler installs a lightweight
 bridge inside the running shell process and gives you live function timing, structured log
-filtering, and object inspection — all from a native GTK4 / libadwaita interface, with zero
+filtering, and object inspection — all from a native GTK4 (libadwaita) interface, with zero
 changes to your extension's code.
 
 ---
@@ -22,7 +22,7 @@ changes to your extension's code.
 | --------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **Extension Manager** | Browse all installed extensions with status, enable/disable with one click, open the source folder directly          |
 | **Log Viewer**        | Live `journalctl` stream scoped to a single extension UUID; filter by log level and search full-text in real time    |
-| **Profiler**          | Monkey-patch any extension at runtime — no code changes needed. Visualise timing as a flamegraph, swimlane, or histogram; export and reload sessions as JSON |
+| **Profiler**          | Monkey-patch any extension at runtime. No code changes needed. Visualise timing as a flamegraph, swimlane, or histogram; export and reload sessions as JSON |
 | **Inspector**         | Inspect a live extension object: browse its properties and methods, see current values, and call methods interactively |
 
 ---
@@ -36,7 +36,7 @@ changes to your extension's code.
   </picture>
 </p>
 
-On first launch GSE Profiler auto-installs a **bridge GJS extension**
+On first launch, GSE Profiler auto-installs a **bridge GJS extension**
 (`gse-profiler-bridge@todevelopers`) into `~/.local/share/gnome-shell/extensions/`.
 The bridge runs inside the `gnome-shell` process itself — giving it direct access to
 every loaded extension's objects and functions. It communicates back to the app over
@@ -52,7 +52,7 @@ GNOME Shell must be restarted once after the bridge is installed:
 - **X11** — restarted automatically via `Meta.restart()` over D-Bus.
 
 The main window shows a live connection indicator so you always know whether the
-bridge is reachable.
+bridge extension is reachable.
 
 ---
 
