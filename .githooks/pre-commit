@@ -3,6 +3,14 @@
 set -euo pipefail
 
 if git diff --cached --name-only | grep -q '^bridge-extension/.*\.js$'; then
-    python3 scripts/update-bridge-hash.py
+    if command -v py &>/dev/null; then
+        py scripts/update-bridge-hash.py
+    elif command -v python3 &>/dev/null; then
+        python3 scripts/update-bridge-hash.py
+    elif command -v python &>/dev/null; then
+        python scripts/update-bridge-hash.py
+    else
+        echo "Warning: Python not found, skipping bridge hash update" >&2
+    fi
     git add bridge-extension/metadata.json
 fi

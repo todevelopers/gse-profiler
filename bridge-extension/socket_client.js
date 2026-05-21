@@ -183,11 +183,13 @@ export class SocketClient {
     }
 
     #onDisconnected() {
+        log('[gse-profiler-bridge] socket disconnected');
         this.#connected = false;
         this.#connection = null;
         this.#outputStream = null;
         this.#cancellable = null;
         if (!this.#stopping) {
+            log(`[gse-profiler-bridge] reconnecting in ${RECONNECT_DELAY_MS}ms`);
             this.#scheduleConnect(RECONNECT_DELAY_MS);
         }
     }
