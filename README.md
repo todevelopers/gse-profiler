@@ -9,21 +9,50 @@
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tommygunx89)
 
-**GTK4 desktop application for managing, debugging, and profiling GNOME Shell extensions.**
-
-Designed for extension developers who need deep runtime insight — live function timing,
-log filtering, object inspection — without leaving the desktop.
+A developer toolkit for GNOME Shell extension authors. GSE Profiler installs a lightweight
+bridge inside the running shell process and gives you live function timing, structured log
+filtering, and object inspection — all from a native GTK4 / libadwaita interface, with zero
+changes to your extension's code.
 
 ---
 
 ## Features
 
-| Feature               | Description                                                                                          |
-| --------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Extension Manager** | List all installed extensions, enable/disable, open source folder                                    |
-| **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search                  |
-| **Profiler**          | Live function timing via monkey-patching; flamegraph / swimlane / histogram views; save & load JSON |
-| **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object          |
+| Feature               | Description                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Extension Manager** | Browse all installed extensions with status, enable/disable with one click, open the source folder directly          |
+| **Log Viewer**        | Live `journalctl` stream scoped to a single extension UUID; filter by log level and search full-text in real time    |
+| **Profiler**          | Monkey-patch any extension at runtime — no code changes needed. Visualise timing as a flamegraph, swimlane, or histogram; export and reload sessions as JSON |
+| **Inspector**         | Inspect a live extension object: browse its properties and methods, see current values, and call methods interactively |
+
+---
+
+## How it works
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
+    <img alt="gse-profiler architecture diagram" src="docs/architecture-light.svg" width="900">
+  </picture>
+</p>
+
+On first launch GSE Profiler auto-installs a **bridge GJS extension**
+(`gse-profiler-bridge@todevelopers`) into `~/.local/share/gnome-shell/extensions/`.
+The bridge runs inside the `gnome-shell` process itself — giving it direct access to
+every loaded extension's objects and functions. It communicates back to the app over
+a Unix socket using newline-delimited JSON, keeping all custom high-frequency traffic
+off D-Bus.
+
+Standard shell APIs (extension list, enable/disable) are accessed the normal way via
+D-Bus, so the app works without elevated permissions.
+
+GNOME Shell must be restarted once after the bridge is installed:
+
+- **Wayland** — the app prompts you to log out and back in.
+- **X11** — restarted automatically via `Meta.restart()` over D-Bus.
+
+The main window shows a live connection indicator so you always know whether the
+bridge is reachable.
 
 ---
 
@@ -69,33 +98,6 @@ curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scri
 
 Removes the app, desktop entry, icon, and bridge extension. Nothing else
 on your system is touched.
-
----
-
-## Architecture
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.svg">
-    <img alt="gse-profiler architecture diagram" src="docs/architecture-light.svg" width="900">
-  </picture>
-</p>
-
-The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge@todevelopers`)
-into `~/.local/share/gnome-shell/extensions/`. The bridge runs inside the
-`gnome-shell` process and is responsible for object inspection and runtime
-monkey-patching (used for profiling) of the selected extension. It
-communicates with the app over a Unix socket using newline-delimited JSON.
-
-Standard GNOME Shell APIs (extension list, enable/disable) are accessed
-directly via D-Bus.
-
-After the bridge is installed, GNOME Shell must be restarted:
-
-- **Wayland** — the app prompts you to log out and log back in.
-- **X11** — automatic restart via `Meta.restart()` over D-Bus.
-
-The main window shows a connection indicator (connected / disconnected).
 
 ---
 
