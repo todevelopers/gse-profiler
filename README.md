@@ -5,6 +5,7 @@
 # GSE Profiler
 
 [![CI](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/todevelopers/gse-profiler)](https://github.com/todevelopers/gse-profiler/releases/latest)
 
 **GTK4 desktop application for managing, debugging, and profiling GNOME Shell extensions.**
 
