@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Recompute bundle-hash in metadata.json if any bridge JS files are staged.
+set -euo pipefail
+
+if git diff --cached --name-only | grep -q '^bridge-extension/.*\.js$'; then
+    python3 scripts/update-bridge-hash.py
+    git add bridge-extension/metadata.json
+fi

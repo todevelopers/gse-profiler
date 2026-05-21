@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -45,6 +46,8 @@ class BridgeManager:
         """Auto-bootstrap: prompt user before installing if bridge is missing."""
         if not _INSTALL_PATH.exists():
             self._prompt_install(parent_window)
+        elif not self._is_up_to_date():
+            self._prompt_update(parent_window)
         elif not self._dbus.is_extension_known(BRIDGE_UUID):
             self._prompt_restart(parent_window)
         elif self._dbus.get_extension_state(BRIDGE_UUID) != ExtensionState.ENABLED:
@@ -109,6 +112,48 @@ class BridgeManager:
         self._prompt_restart(parent_window, uninstall=True)
 
     # ── Private ───────────────────────────────────────────────────────────
+
+    def _is_up_to_date(self) -> bool:
+        """Return True if the installed bridge matches the bundled one (by bundle-hash)."""
+        try:
+            bundled_hash = json.loads(
+                (self._source / "metadata.json").read_text(encoding="utf-8")
+            ).get("bundle-hash")
+        except (OSError, json.JSONDecodeError):
+            return True  # bundled metadata unreadable — can't compare, don't block
+
+        if bundled_hash is None:
+            return True  # bundle-hash not yet generated, feature inactive
+
+        try:
+            installed_hash = json.loads(
+                (_INSTALL_PATH / "metadata.json").read_text(encoding="utf-8")
+            ).get("bundle-hash")
+        except (OSError, json.JSONDecodeError):
+            return False  # installed metadata missing or corrupt — needs reinstall
+
+        return bundled_hash == installed_hash
+
+    def _prompt_update(self, parent_window: Gtk.Window | None) -> None:
+        dialog = Adw.AlertDialog.new(
+            "Bridge Extension Update Required",
+            "The bridge extension bundled with this version of GSE Profiler "
+            "differs from the installed one.\n\n"
+            "Reinstall now to apply the update?",
+        )
+        dialog.add_response("later", "Later")
+        dialog.add_response("reinstall", "Reinstall")
+        dialog.set_response_appearance("reinstall", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("reinstall")
+        dialog.connect("response", self._on_update_response, parent_window)
+        if parent_window:
+            dialog.present(parent_window)
+
+    def _on_update_response(
+        self, _dialog: Adw.AlertDialog, response: str, parent_window: Gtk.Window | None
+    ) -> None:
+        if response == "reinstall":
+            self._do_install(parent_window)
 
     def _prompt_install(self, parent_window: Gtk.Window | None) -> None:
         dialog = Adw.AlertDialog.new(
