@@ -45,6 +45,11 @@
   </requires>
 
   <releases>
+    <release version="0.0.11" date="2026-05-21">
+      <description>
+        <p>Fix Unix socket path so the app communicates with the bridge extension in Flatpak.</p>
+      </description>
+    </release>
     <release version="0.0.10" date="2026-05-21">
       <description>
         <p>Fix bridge extension install path and logout in Flatpak sandbox.</p>
