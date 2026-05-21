@@ -12,6 +12,7 @@ gi.require_version("GObject", "2.0")
 from gi.repository import Gio, GLib, GObject
 
 _log = logging.getLogger(__name__)
+_SOCKET_SUBDIR = "gse-profiler"
 _SOCKET_NAME = "gse-profiler.sock"
 _IN_FLATPAK: bool = os.path.exists("/.flatpak-info")
 
@@ -19,12 +20,13 @@ _IN_FLATPAK: bool = os.path.exists("/.flatpak-info")
 def _socket_path() -> str:
     if _IN_FLATPAK:
         # GLib.get_user_runtime_dir() inside a Flatpak sandbox returns the
-        # app-scoped dir (/run/user/<uid>/app/<id>).  The bridge extension
-        # runs in gnome-shell on the host and connects to the host's
-        # XDG_RUNTIME_DIR.  Use the uid-based path directly so both sides
-        # agree on the same socket location.
-        return f"/run/user/{os.getuid()}/{_SOCKET_NAME}"  # type: ignore[attr-defined]
-    return os.path.join(GLib.get_user_runtime_dir(), _SOCKET_NAME)
+        # app-scoped dir (/run/user/<uid>/app/<id>).  Use the uid-based host
+        # path directly.  The socket lives in a subdirectory so that the
+        # Flatpak --filesystem=xdg-run/gse-profiler:create permission can
+        # bind-mount the whole directory — bind-mounting a single socket file
+        # only works for files that already exist when the sandbox starts.
+        return f"/run/user/{os.getuid()}/{_SOCKET_SUBDIR}/{_SOCKET_NAME}"  # type: ignore[attr-defined]
+    return os.path.join(GLib.get_user_runtime_dir(), _SOCKET_SUBDIR, _SOCKET_NAME)
 
 
 class SocketServer(GObject.Object):
@@ -59,6 +61,7 @@ class SocketServer(GObject.Object):
     def start(self) -> None:
         """Start listening on the Unix socket."""
         sock_path = _socket_path()
+        os.makedirs(os.path.dirname(sock_path), exist_ok=True)
         _unlink_socket(sock_path)
 
         self._service = Gio.SocketService.new()

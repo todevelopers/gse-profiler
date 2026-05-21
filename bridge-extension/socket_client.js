@@ -3,12 +3,13 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 
+const SOCKET_SUBDIR = 'gse-profiler';
 const SOCKET_NAME = 'gse-profiler.sock';
 const RECONNECT_DELAY_MS = 3000;
 const PROTOCOL_VERSION = '1';
 
 function _socketPath() {
-    return GLib.build_filenamev([GLib.get_user_runtime_dir(), SOCKET_NAME]);
+    return GLib.build_filenamev([GLib.get_user_runtime_dir(), SOCKET_SUBDIR, SOCKET_NAME]);
 }
 
 export class SocketClient {
@@ -114,13 +115,16 @@ export class SocketClient {
     }
 
     #doConnect() {
-        const addr = Gio.UnixSocketAddress.new(_socketPath());
+        const path = _socketPath();
+        log(`[gse-profiler-bridge] socket connect attempt: ${path}`);
+        const addr = Gio.UnixSocketAddress.new(path);
         const client = new Gio.SocketClient();
         client.connect_async(addr, null, (obj, result) => {
             try {
                 const conn = obj.connect_finish(result);
                 this.#onConnected(conn);
-            } catch (_e) {
+            } catch (e) {
+                log(`[gse-profiler-bridge] socket connect failed: ${e.message}`);
                 if (!this.#stopping) {
                     this.#scheduleConnect(RECONNECT_DELAY_MS);
                 }
@@ -129,6 +133,7 @@ export class SocketClient {
     }
 
     #onConnected(connection) {
+        log(`[gse-profiler-bridge] socket connected: ${_socketPath()}`);
         this.#connection = connection;
         this.#connected = true;
         this.#cancellable = Gio.Cancellable.new();

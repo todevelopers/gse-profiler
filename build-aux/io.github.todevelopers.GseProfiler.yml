@@ -14,8 +14,10 @@ finish-args:
   - --talk-name=org.freedesktop.Flatpak
   # Bridge extension install path
   - --filesystem=~/.local/share/gnome-shell/extensions:create
-  # Unix socket shared with the bridge extension running in gnome-shell
-  - --filesystem=xdg-run/gse-profiler.sock
+  # Unix socket shared with the bridge extension running in gnome-shell.
+  # :create bind-mounts the whole directory so files created inside are
+  # visible on the host (bind-mounting a single non-existent file is unreliable).
+  - --filesystem=xdg-run/gse-profiler:create
 
 modules:
   - name: gse-profiler
