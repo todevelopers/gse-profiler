@@ -20,7 +20,9 @@ modules:
     buildsystem: simple
     build-commands:
       - mkdir -p /app/share/gse-profiler
-      - cp -r app bridge-extension api scripts /app/share/gse-profiler/
+      - cp -r app bridge-extension api /app/share/gse-profiler/
+      - install -Dm755 scripts/restart-shell.sh
+          /app/share/gse-profiler/scripts/restart-shell.sh
       - install -Dm755 build-aux/gse-profiler.sh /app/bin/gse-profiler
       - install -Dm644 data/io.github.todevelopers.GseProfiler.desktop
           /app/share/applications/io.github.todevelopers.GseProfiler.desktop

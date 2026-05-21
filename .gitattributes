@@ -1,0 +1,7 @@
+# Files excluded from `git archive` (source tarballs and release bundles).
+# These are internal development/tooling files not needed by end users.
+.claude/                        export-ignore
+CLAUDE.md                       export-ignore
+PLAN.md                         export-ignore
+gse-profiler_code_review.md     export-ignore
+docs/                           export-ignore
