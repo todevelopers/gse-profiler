@@ -175,13 +175,8 @@ gse-profiler/
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run linters: `ruff check app/` and `eslint bridge-extension/`
-4. Run tests: `pytest tests/`
-5. Open a pull request
-
-See [CHANGELOG.md](CHANGELOG.md) for release notes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide — development setup,
+local checks, scripts, and CI/release automation.
 
 ---
 
