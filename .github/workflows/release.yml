@@ -109,6 +109,14 @@ jobs:
           flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak --user install -y flathub org.gnome.Platform//50 org.gnome.Sdk//50
 
+      - name: Inject release entry into metainfo
+        run: |
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          DATE=$(date -u +%Y-%m-%d)
+          sed -i \
+            "s|<!-- injected by CI on each release -->|<release version=\"${VERSION}\" date=\"${DATE}\"/>|" \
+            data/io.github.todevelopers.GseProfiler.metainfo.xml
+
       - name: Build Flatpak bundle
         run: |
           VERSION="${{ needs.version-bump.outputs.version }}"
