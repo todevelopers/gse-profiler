@@ -62,14 +62,23 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Set up Flathub and install GNOME runtime (user)
+        run: |
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y flathub org.gnome.Platform//48 org.gnome.Sdk//48
 
       - name: Build Flatpak bundle
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: gse-profiler-${{ env.VERSION }}-x86_64.flatpak
-          manifest-path: build-aux/io.github.todevelopers.GseProfiler.yml
-          cache-key: flatpak-builder-${{ github.sha }}
+        run: |
+          flatpak-builder \
+            --disable-rofiles-fuse \
+            --force-clean \
+            --repo=repo \
+            flatpak_app \
+            build-aux/io.github.todevelopers.GseProfiler.yml
+          flatpak build-bundle repo \
+            gse-profiler-${{ env.VERSION }}-x86_64.flatpak \
+            io.github.todevelopers.GseProfiler
 
       - name: Attach Flatpak bundle to GitHub Release
         uses: softprops/action-gh-release@v2
