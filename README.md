@@ -20,9 +20,9 @@ log filtering, object inspection — without leaving the desktop.
 
 | Feature               | Description                                                                                          |
 | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Extension Manager** | List all installed extensions, enable/disable, clone from GitHub, open source folder                 |
+| **Extension Manager** | List all installed extensions, enable/disable, open source folder                                    |
 | **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search                  |
-| **Profiler**          | Live function timing via monkey-patching; flamegraph / swimlane / histogram views; save & load JSON  |
+| **Profiler**          | Live function timing via monkey-patching; flamegraph / swimlane / histogram views; save & load JSON |
 | **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object          |
 
 ---
@@ -105,7 +105,6 @@ The main window shows a connection indicator (connected / disconnected).
 - Python 3.11+
 - GTK 4 and libadwaita 1
 - PyGObject (GTK4 bindings)
-- `git` — for cloning extensions
 - `journalctl` — for the log viewer (part of `systemd`)
 
 ---
@@ -158,7 +157,6 @@ gse-profiler/
 │       ├── dbus_client.py      # D-Bus proxy for gnome-shell APIs
 │       ├── socket_server.py    # Unix socket server (async)
 │       ├── bridge_manager.py   # bridge install / update / hash check
-│       ├── git_manager.py      # git clone / pull wrapper
 │       └── journal_reader.py   # journalctl --follow subprocess
 ├── bridge-extension/           # GJS GNOME Shell extension
 │   ├── extension.js

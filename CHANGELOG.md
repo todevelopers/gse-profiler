@@ -5,14 +5,13 @@ First public release.
 ### Features
 
 - **Extension Manager** — list installed GNOME Shell extensions, enable/disable
-  with state badges (enabled, disabled, error, out-of-date), clone extensions
-  straight from GitHub, open the source folder in your editor.
+  with state badges (enabled, disabled, error, out-of-date), open the source
+  folder in your editor.
 - **Log Viewer** — live `journalctl` stream filtered by extension UUID and log
   level with full-text search.
 - **Profiler** — live function timing via runtime monkey-patching, visualized
   in three interchangeable modes:
-  - **Flamegraph** — nested call stack with zoom, pan, and per-function
-    highlighting.
+  - **Flamegraph** — nested call stack with per-function highlighting.
   - **Swimlane** — chronological per-function lanes.
   - **Histogram** — duration distribution across calls.
   Includes a per-function call table and the ability to save/load profile

@@ -19,7 +19,7 @@
     <ul>
       <li>Extension manager with enable/disable toggle and state badges</li>
       <li>Live log viewer with UUID filter, log-level filter, and full-text search</li>
-      <li>Flame graph profiler with zoom, pan, and per-function call table</li>
+      <li>Flame graph profiler with per-function highlighting and call table</li>
       <li>Inspector for browsing extension stateObj properties at runtime</li>
     </ul>
   </description>
@@ -55,7 +55,7 @@
     </screenshot>
     <screenshot>
       <image type="source" width="1250" height="789">https://github.com/user-attachments/assets/a17c4dcc-7ccd-4348-87fb-6c233a3d797d</image>
-      <caption>Flame graph profiler with zoom and per-function call table</caption>
+      <caption>Flame graph profiler with per-function highlighting and call table</caption>
     </screenshot>
   </screenshots>
 
