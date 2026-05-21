@@ -6,6 +6,8 @@
 
 [![CI](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/todevelopers/gse-profiler/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/todevelopers/gse-profiler?cacheSeconds=0)](https://github.com/todevelopers/gse-profiler/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tommygunx89)
 
 **GTK4 desktop application for managing, debugging, and profiling GNOME Shell extensions.**
 
@@ -16,42 +18,57 @@ log filtering, object inspection — without leaving the desktop.
 
 ## Features
 
-| Feature               | Description                                                                                |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| **Extension Manager** | List all installed extensions, enable/disable, clone from GitHub, open source folder       |
-| **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search        |
-| **Profiler**          | Live function timing via monkey-patching; load and visualize saved profile files           |
-| **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object |
+| Feature               | Description                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Extension Manager** | List all installed extensions, enable/disable, clone from GitHub, open source folder                 |
+| **Log Viewer**        | Live `journalctl` stream filtered by extension UUID and log level, full-text search                  |
+| **Profiler**          | Live function timing via monkey-patching; flamegraph / swimlane / histogram views; save & load JSON  |
+| **Inspector**         | Live access to extension `stateObj` — browse properties and methods of a running JS object          |
 
 ---
 
 ## Gallery
-<img width="1250" height="818" alt="Screenshot From 2026-05-16 12-40-11" src="https://github.com/user-attachments/assets/084aceef-e270-46a4-8120-274e519f6cb8" />
-<img width="1250" height="830" alt="Screenshot From 2026-05-16 14-39-41" src="https://github.com/user-attachments/assets/74bfa024-e534-43da-8125-f24719e3e092" />
-<img width="1250" height="789" alt="Screenshot From 2026-05-17 14-36-41" src="https://github.com/user-attachments/assets/a17c4dcc-7ccd-4348-87fb-6c233a3d797d" />
+
+<img width="1250" height="818" alt="Extension manager" src="https://github.com/user-attachments/assets/084aceef-e270-46a4-8120-274e519f6cb8" />
+<img width="1250" height="830" alt="Live log viewer" src="https://github.com/user-attachments/assets/74bfa024-e534-43da-8125-f24719e3e092" />
+<img width="1250" height="789" alt="Flamegraph profiler" src="https://github.com/user-attachments/assets/a17c4dcc-7ccd-4348-87fb-6c233a3d797d" />
 
 ---
 
-## Quick Start
+## Install
 
-> Requires Fedora (or any GNOME 48+ distro) running inside an active GNOME session.
+> Requires GNOME Shell 46+ in an active GNOME session (X11 or Wayland).
+
+### Option 1 — Flatpak (recommended)
+
+Grab the `.flatpak` bundle from the
+[latest release](https://github.com/todevelopers/gse-profiler/releases/latest)
+and install it:
+
+```bash
+flatpak install --user gse-profiler-*.flatpak
+flatpak run io.github.todevelopers.GseProfiler
+```
+
+### Option 2 — One-line source install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scripts/setup-and-run.sh | bash
 ```
 
-The script checks for GTK4/libadwaita (pre-installed on any Fedora GNOME system),
-clones the repository to `~/gse-profiler`, and launches the app — no `sudo`, no prompts.
+The script checks for GTK4 / libadwaita, clones the repository to
+`~/gse-profiler`, and launches the app — no `sudo`, no prompts. On
+subsequent runs the same command pulls the latest changes and restarts
+the app.
 
-On subsequent runs the same command pulls the latest changes and restarts the app.
-
-## Uninstall
+### Uninstall
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/todevelopers/gse-profiler/main/scripts/uninstall.sh | bash
 ```
 
-Removes the app repository, desktop entry, icon, and bridge extension. Nothing else on your system is touched.
+Removes the app, desktop entry, icon, and bridge extension. Nothing else
+on your system is touched.
 
 ---
 
@@ -64,37 +81,45 @@ Removes the app repository, desktop entry, icon, and bridge extension. Nothing e
   </picture>
 </p>
 
-The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge`) into
-`~/.local/share/gnome-shell/extensions/`. The bridge runs inside the `gnome-shell` process
-and is responsible for object inspection and monkey-patching (to get profiling data) of selected extension.
-It communicates with the app over a Unix socket using newline-delimited JSON.
+The app auto-installs a **bridge GJS extension** (`gse-profiler-bridge@todevelopers`)
+into `~/.local/share/gnome-shell/extensions/`. The bridge runs inside the
+`gnome-shell` process and is responsible for object inspection and runtime
+monkey-patching (used for profiling) of the selected extension. It
+communicates with the app over a Unix socket using newline-delimited JSON.
 
-Standard GNOME Shell APIs (extension list, enable/disable) are accessed directly via D-Bus.
+Standard GNOME Shell APIs (extension list, enable/disable) are accessed
+directly via D-Bus.
+
+After the bridge is installed, GNOME Shell must be restarted:
+
+- **Wayland** — the app prompts you to log out and log back in.
+- **X11** — automatic restart via `Meta.restart()` over D-Bus.
+
+The main window shows a connection indicator (connected / disconnected).
 
 ---
 
 ## Requirements
 
-- GNOME 46+
+- GNOME Shell 46+ (tested up to 50)
 - Python 3.11+
+- GTK 4 and libadwaita 1
 - PyGObject (GTK4 bindings)
 - `git` — for cloning extensions
 - `journalctl` — for the log viewer (part of `systemd`)
 
 ---
 
-## Installation
+## Manual installation (development)
 
-### 1. Clone the repository
+### 1. Clone
 
 ```bash
-git clone https://github.com/gazovic/gse-profiler.git
+git clone https://github.com/todevelopers/gse-profiler.git
 cd gse-profiler
 ```
 
-### 2. Install Python dependencies
-
-Via your distro package manager (recommended — avoids GTK4 binding issues with pip):
+### 2. Install system dependencies
 
 ```bash
 # Fedora / RHEL
@@ -104,31 +129,14 @@ sudo dnf install python3-gobject gtk4 libadwaita
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
 ```
 
-Or with pip (requires system GTK4 libraries already installed):
-
-```bash
-pip install --user PyGObject
-```
-
 ### 3. Run
 
 ```bash
-python3 app/main.py
+python3 -m app.main
 ```
 
-On first launch the app will offer to install the bridge extension and restart GNOME Shell.
-
----
-
-## Bridge Extension
-
-The bridge extension is bundled in `bridge-extension/` and **auto-installed** by the
-application — no manual steps needed. After installation, GNOME Shell must be restarted:
-
-- **Wayland** — the app will prompt you to log out and log back in
-- **X11** — automatic restart via `Meta.restart()` over D-Bus
-
-The main app window shows a connection indicator (connected / disconnected).
+On first launch the app will offer to install the bridge extension and
+restart GNOME Shell.
 
 ---
 
@@ -140,25 +148,28 @@ gse-profiler/
 │   ├── main.py
 │   ├── ui/
 │   │   ├── extension_manager.py
+│   │   ├── extension_list.py
+│   │   ├── details_view.py
 │   │   ├── log_viewer.py
 │   │   ├── profiler_view.py
+│   │   ├── profiler/           # flamegraph, swimlane, histogram widgets
 │   │   └── inspector_view.py
-│   ├── core/
-│   │   ├── dbus_client.py      # D-Bus proxy for gnome-shell APIs
-│   │   ├── socket_server.py    # Unix socket server (async)
-│   │   ├── git_manager.py      # git clone / pull subprocess wrapper
-│   │   └── journal_reader.py   # journalctl --follow subprocess
-│   └── data/ui/                # Glade .ui files (optional)
-├── bridge-extension/        # GJS GNOME Shell extension (bridge)
+│   └── core/
+│       ├── dbus_client.py      # D-Bus proxy for gnome-shell APIs
+│       ├── socket_server.py    # Unix socket server (async)
+│       ├── bridge_manager.py   # bridge install / update / hash check
+│       ├── git_manager.py      # git clone / pull wrapper
+│       └── journal_reader.py   # journalctl --follow subprocess
+├── bridge-extension/           # GJS GNOME Shell extension
 │   ├── extension.js
 │   ├── profiler.js
 │   ├── inspector.js
 │   ├── socket_client.js
 │   └── metadata.json
-├── api/
-│   └── devtools-api.js         # opt-in developer API
-├── scripts/
-│   └── restart-shell.sh        # handles Wayland (logout) and X11 (restart)
+├── build-aux/                  # Flatpak manifest and launcher
+├── data/                       # .desktop, AppStream metainfo, icons
+├── docs/                       # architecture diagrams
+├── scripts/                    # setup / uninstall / shell-restart
 └── tests/                      # pytest unit tests
 ```
 
@@ -168,12 +179,24 @@ gse-profiler/
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Run linters before committing: `ruff check app/` and `eslint bridge-extension/ api/`
+3. Run linters: `ruff check app/` and `eslint bridge-extension/`
 4. Run tests: `pytest tests/`
 5. Open a pull request
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+---
+
+## Support
+
+If GSE Profiler saves you time, consider supporting development on
+[Ko-fi](https://ko-fi.com/tommygunx89) — every coffee helps keep the
+project moving.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tommygunx89)
 
 ---
 
 ## License
 
-GPL-3.0 — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see [LICENSE](LICENSE).

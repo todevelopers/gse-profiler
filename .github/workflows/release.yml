@@ -69,13 +69,24 @@ jobs:
           echo "TARBALL=gse-profiler-${VERSION}.tar.gz" >> "$GITHUB_ENV"
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
-      - name: Generate changelog
+      - name: Extract release notes from CHANGELOG.md
         run: |
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [[ -n "$PREV_TAG" ]]; then
-            git log --oneline "${PREV_TAG}..HEAD" > CHANGELOG.txt
+          VERSION="${{ needs.version-bump.outputs.version }}"
+          # Pull the section for this version: from "## [VERSION]" up to (but not including) the next "## [" heading.
+          if [[ -f CHANGELOG.md ]] && grep -q "^## \[${VERSION}\]" CHANGELOG.md; then
+            awk -v ver="${VERSION}" '
+              $0 ~ "^## \\[" ver "\\]" { found=1; next }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md > CHANGELOG.txt
           else
-            git log --oneline HEAD > CHANGELOG.txt
+            # Fallback: commit list since previous tag
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            if [[ -n "$PREV_TAG" ]]; then
+              git log --oneline "${PREV_TAG}..HEAD" > CHANGELOG.txt
+            else
+              git log --oneline HEAD > CHANGELOG.txt
+            fi
           fi
 
       - name: Create GitHub Release
