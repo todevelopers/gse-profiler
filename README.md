@@ -9,25 +9,29 @@
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
 [![ko-fi](https://img.shields.io/badge/Support%20on-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/tommygunx89)
 
-A developer toolkit for GNOME Shell extension authors. GSE Profiler installs a lightweight
-bridge inside the running shell process and gives you live function timing, structured log
-filtering, and object inspection — all from a native GTK4 (libadwaita) interface, with zero
-changes to your extension's code.
+An all-in-one developer toolkit for GNOME Shell extension authors — built as a native
+GTK4 / libadwaita app that fits right into your desktop.
+
+GSE Profiler installs a lightweight bridge extension inside the running shell process and instruments
+your extension at runtime, with **zero changes to your code**. Profile function timing and
+visualise it as a **flamegraph** (call tree and timing), **swimlane** (when and how often each function runs), or **histogram** (where time is actually spent). Filter and search live logs
+scoped to a single extension UUID. Inspect the live state of any running extension object:
+browse properties, see current values, and drill into nested objects on the fly.
 
 ---
 
 ## Features
 
-| Feature               | Description                                                                                                          |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **Extension Manager** | Browse all installed extensions with status, enable/disable with one click, open the source folder directly          |
-| **Log Viewer**        | Live `journalctl` stream scoped to a single extension UUID; filter by log level and search full-text in real time    |
+| Feature               | Description                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Extension Manager** | Browse all installed extensions with status, enable/disable with one click, open the source folder directly                                                 |
+| **Log Viewer**        | Live `journalctl` stream scoped to a single extension UUID; filter by log level and search full-text in real time                                           |
 | **Profiler**          | Monkey-patch any extension at runtime. No code changes needed. Visualise timing as a flamegraph, swimlane, or histogram; export and reload sessions as JSON |
-| **Inspector**         | Inspect a live extension object: browse its properties and methods, see current values, and call methods interactively |
+| **Inspector**         | Inspect a live extension object: browse its properties and methods, see current values, and call methods interactively                                      |
 
 ---
 
-## How it works
+## How It Works
 
 <p align="center">
   <picture>
@@ -36,23 +40,73 @@ changes to your extension's code.
   </picture>
 </p>
 
-On first launch, GSE Profiler auto-installs a **bridge GJS extension**
-(`gse-profiler-bridge@todevelopers`) into `~/.local/share/gnome-shell/extensions/`.
-The bridge runs inside the `gnome-shell` process itself — giving it direct access to
-every loaded extension's objects and functions. It communicates back to the app over
-a Unix socket using newline-delimited JSON, keeping all custom high-frequency traffic
-off D-Bus.
-
-Standard shell APIs (extension list, enable/disable) are accessed the normal way via
-D-Bus, so the app works without elevated permissions.
+GSE Profiler is split into two parts: a **GTK4 app** (Python) and a **bridge GJS extension**
+(`gse-profiler-bridge@todevelopers`) that the app auto-installs on first launch. The bridge
+runs inside the `gnome-shell` process itself — giving it direct, in-process access to every
+loaded extension's live objects and functions.
 
 GNOME Shell must be restarted once after the bridge is installed:
 
 - **Wayland** — the app prompts you to log out and back in.
 - **X11** — restarted automatically via `Meta.restart()` over D-Bus.
 
-The main window shows a live connection indicator so you always know whether the
-bridge extension is reachable.
+The main window shows a live connection indicator so you always know whether the bridge is reachable.
+
+### Communication
+
+The app and bridge talk over a **Unix domain socket**
+(`$XDG_RUNTIME_DIR/gse-profiler/gse-profiler.sock`) using newline-delimited JSON. The bridge
+initiates the connection and reconnects automatically after a failure (3 s delay). On connect
+it sends a `hello` handshake; from that point the app can start a profiling or inspection session.
+
+Standard extension management — listing, enabling, disabling — uses the regular
+`org.gnome.Shell.Extensions` **D-Bus** interface. The socket exists only for
+data that D-Bus is not suited for: high-frequency profiling events and live inspection results.
+No elevated permissions are required for either path.
+
+### Monkey-patching and overhead
+
+When you start profiling, the bridge walks the extension's `stateObj` — its full prototype
+chain and one level of owned child objects (e.g. `_indicator`) — and wraps every enumerable
+function it finds. No changes to your extension's source are needed; all patches are
+fully reversed when you stop.
+
+Each wrapped call adds two `GLib.get_monotonic_time()` reads (microsecond precision) and
+queues one JSON event for the socket. For a typical GNOME Shell extension the overhead is
+negligible, but extremely tight animation loops or extensions that invoke hundreds of
+functions per frame may see a measurable slowdown during recording.
+
+**What the profiler cannot patch:**
+
+- GObject virtual functions (vfuncs)
+- Closures stored in plain variables (not reachable by property enumeration)
+- Functions added dynamically after profiling starts
+
+### Limits
+
+| Limit                                | Value                         |
+| ------------------------------------ | ----------------------------- |
+| Max recorded events                  | 50,000 (oldest dropped first) |
+| Inspector: max properties per object | 50                            |
+| Inspector: max string value length   | 200 characters                |
+| Inspector: max array elements shown  | 50                            |
+| UI refresh batch window              | 80 ms                         |
+
+### Profiler views
+
+All three views work on the same event data — they just answer different questions:
+
+**Flamegraph** — call tree laid out on a real-time axis. Each bar is one call; width equals
+duration; nesting shows caller/callee depth. Best for understanding *what called what* and
+spotting unexpectedly deep or wide call stacks.
+
+**Swimlane** — one horizontal lane per function, idle gaps compressed. Each invocation is a
+separate segment on that function's row, so you can see *when and how often* each function
+runs without the call-depth nesting getting in the way.
+
+**Histogram** — functions ranked by *self-time* (wall-clock time spent in the function's own
+code, excluding callees). The fastest answer to *where is time actually being spent?* — it
+filters out time that belongs to the callee, not the caller.
 
 ---
 
@@ -184,9 +238,8 @@ local checks, scripts, and CI/release automation.
 
 ## Support
 
-If GSE Profiler saves you time, consider supporting development on
-[Ko-fi](https://ko-fi.com/tommygunx89) — every coffee helps keep the
-project moving.
+If you find GSE Profiler useful or it saved you some time during debugging, consider
+supporting it on Ko-fi.
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/tommygunx89)
 
